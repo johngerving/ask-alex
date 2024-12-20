@@ -13,7 +13,8 @@ func main() {
 
 	e.Use(middleware.Logger())
 
-	e.GET("/chat", handlers.ChatHandler)
+	e.GET("/chat", handlers.ChatPageHandler)
+	e.GET("/chat/messages", handlers.ChatMessageHandler)
 
 	e.Start(":8080")
 }

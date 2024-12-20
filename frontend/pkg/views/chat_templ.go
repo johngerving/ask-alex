@@ -43,17 +43,7 @@ func Chat() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"w-screen h-screen p-5\"><div class=\"w-full h-full border border-slate-300 rounded-lg flex flex-col\"><h1 class=\"text-2xl w-full border-b border-slate-300 p-3\">Chat</h1><div class=\"w-full h-max flex-grow overflow-auto flex flex-col-reverse p-3\"><div class=\"w-full flex flex-col gap-2\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			for _ = range 10 {
-				templ_7745c5c3_Err = templates.ChatBubble().Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div></div>")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"w-screen h-screen p-5\"><div class=\"w-full h-full border border-slate-300 rounded-lg flex flex-col\"><h1 class=\"text-2xl w-full border-b border-slate-300 p-3\">Chat</h1><div class=\"w-full h-max flex-grow overflow-auto flex flex-col-reverse p-3\"><div hx-ext=\"sse\" sse-connect=\"/chat/messages\" sse-swap=\"message\" hx-swap=\"beforeend\" class=\"w-full flex flex-col gap-2\"></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
