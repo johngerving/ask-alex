@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: links-publisher
+  labels:
+    app: links-publisher 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: links-publisher
+  template:
+    metadata:
+      name: links-publisher
+      labels:
+        k8s-app: links-publisher
+    spec:
+      containers:
+      - name: links-publisher
+        image: kind-registry:5000/links-publisher
+        envFrom:
+        - secretRef:
+            name:

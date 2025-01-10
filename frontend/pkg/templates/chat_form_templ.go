@@ -29,7 +29,7 @@ func ChatForm() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<form class=\"w-full rounded-b-lg pb-2 px-2 flex gap-1 items-end\"><textarea type=\"text\" oninput=\"this.style.height = &#39;&#39;;this.style.height = Math.min(this.scrollHeight+2, 136) + &#39;px&#39;\" class=\"w-full h-11 border border-slate-300 rounded-lg text-base p-2 resize-none overflow-y-auto\"></textarea> <button type=\"submit\" class=\"h-10 bg-blue-500 text-white px-3 rounded-lg\">Send</button></form>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<form class=\"w-full rounded-b-lg pb-2 px-2 flex gap-1 items-end\"><textarea type=\"text\" oninput=\"this.style.height = &#39;&#39;;this.style.height = Math.min(this.scrollHeight+2, 136) + &#39;px&#39;\" class=\"w-full h-11 border border-slate-300 rounded-lg text-base p-2 resize-none overflow-y-auto\"></textarea> <button type=\"submit\" class=\"h-11 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-all text-white px-3 rounded-lg\">Send</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
