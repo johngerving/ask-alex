@@ -17,7 +17,7 @@ from docling.datamodel.base_models import InputFormat
 
 from docling_converter import DoclingConverter 
 
-from pipeline_step import PipelineStep
+from rabbitmq_pipeline import PipelineStep
 from typing import Optional
 
 class PDFParser(PipelineStep):

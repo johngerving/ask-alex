@@ -2,7 +2,7 @@ import json
 import os
 
 import pika
-from pika_credentials import get_pika_connection
+from rabbitmq_pipeline import get_pika_connection
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
