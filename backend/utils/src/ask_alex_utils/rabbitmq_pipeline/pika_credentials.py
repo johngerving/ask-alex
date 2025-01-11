@@ -2,16 +2,25 @@ import pika
 
 from dotenv import load_dotenv
 import os
+from typing import Optional
 
-def get_pika_connection() -> pika.BlockingConnection:
+def get_pika_connection(
+    dotenv_path: Optional[str] = None
+) -> pika.BlockingConnection:
     '''
     Returns a pika.BlockingConnection given the following environment variables:
         RABBITMQ_HOST
         RABBITMQ_PORT
         RABBITMQ_USER
         RABBITMQ_PASS
+
+    Args:
+        dotenv_path: The path to a .env file to load environment variables from.
     '''
-    load_dotenv()
+    if dotenv_path is not None:
+        load_dotenv(dotenv_path=dotenv_path)
+    else:
+        load_dotenv()
 
     # Get environment variables
     RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")

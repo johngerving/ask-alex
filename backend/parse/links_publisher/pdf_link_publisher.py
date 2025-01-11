@@ -2,25 +2,38 @@ import json
 import os
 
 import pika
-from rabbitmq_pipeline import get_pika_connection
+from ask_alex_utils.rabbitmq_pipeline import PipelineStep
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
 
-class PDFLinkPublisher:
-    def __init__(self):
-        # Initialize RabbitMQ connetion
-        self.connection = get_pika_connection()
-        self.channel = self.connection.channel()
 
-        # Declare queue for publishing links
-        self.channel.queue_declare(queue="links_queue")
+class PDFLinkPublisher(PipelineStep):
+    def __init__(
+            self,
+            *args,
+            **kwargs
+    ):
+        '''
+        Initialize link publisher.
+        '''
+        super().__init__(
+            *args,
+            **kwargs
+        )
 
         # List to hold batches before publishing to the queue
         self.batch = []
         self.batch_size = 2 
+    
+    def ack_message(self, delivery_tag, result):
+        pass 
+    def reject_message(self, delivery_tag):
+        pass
+    def work(self, delivery_tag, body):
+        pass 
 
-    def publish_links(self):
+    def run(self):
         '''Get a list of PDF links from Digital Commons and publish to a RabbitMQ queue.'''
         # Initialize HTTP session
         session = requests.Session()
@@ -35,7 +48,6 @@ class PDFLinkPublisher:
 
         start = 0
         LIMIT = 500
-        links = []
         while True:
             # Get list of documents
             resp = session.get(f"https://content-out.bepress.com/v2/digitalcommons.humboldt.edu/query?download_format=pdf&start={start}&limit={LIMIT}", headers={"Authorization": os.getenv("API_TOKEN")})
@@ -82,15 +94,3 @@ class PDFLinkPublisher:
 
             self.channel.basic_publish(exchange="", routing_key="links_queue", body=body)
 
-       
-    def __del__(self):
-        '''Cleanup when object is destroyed'''
-        if hasattr(self, "connection") and self.connection.is_open:
-            self.connection.close()
-
-def main():
-    publisher = PDFLinkPublisher()
-    publisher.publish_links()
-
-if __name__ == "__main__":
-    main()

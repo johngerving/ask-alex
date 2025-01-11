@@ -6,7 +6,6 @@ from pika.adapters.blocking_connection import BlockingChannel
 from pika.spec import Basic
 import pika.channel
 
-
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import (
     AcceleratorDevice,
@@ -17,8 +16,9 @@ from docling.datamodel.base_models import InputFormat
 
 from docling_converter import DoclingConverter 
 
-from rabbitmq_pipeline import PipelineStep
+from ask_alex_utils.rabbitmq_pipeline import PipelineStep
 from typing import Optional
+
 
 class PDFParser(PipelineStep):
     def __init__(
@@ -88,13 +88,3 @@ class PDFParser(PipelineStep):
         else:
             pass
 
-def main():
-    parser = PDFParser(
-        consumer_queue="links_queue",
-        publisher_queues=["indexing_queue"],
-        prefetch_count=1
-    )
-    parser.run()
-
-if __name__ == "__main__":
-    main()

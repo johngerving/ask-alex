@@ -3,7 +3,7 @@ import threading
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.spec import Basic
-from pika_credentials import get_pika_connection
+from ask_alex_utils.rabbitmq_pipeline.pika_credentials import get_pika_connection
 
 from abc import ABC, abstractmethod
 from typing import Optional, Any
@@ -13,8 +13,8 @@ import functools
 class PipelineStep(ABC):
     def __init__(
         self,
-        consumer_queue: str,
-        publisher_queues: Optional[str] = None, 
+        consumer_queue: Optional[str] = None,
+        publisher_queues: Optional[list[str]] = None, 
         prefetch_count: Optional[int] = 1 
     ):
         # Initialize RabbitMQ connection
@@ -22,14 +22,14 @@ class PipelineStep(ABC):
         self.channel = self.connection.channel()
 
         # Set prefetch count
-        print(f"Initializing with prefetch count {prefetch_count}")
         self.channel.basic_qos(prefetch_count=prefetch_count)
 
-        # Declare queues
-        self.channel.queue_declare(queue=consumer_queue)
+        # Declare queue to consume from if provided
+        if consumer_queue is not None:
+            self.channel.queue_declare(queue=consumer_queue)
 
-        # Start consuming the queue
-        self.channel.basic_consume(consumer_queue, self._on_message)
+            # Start consuming the queue
+            self.channel.basic_consume(consumer_queue, self._on_message)
 
         # Declare queues to publish to if provided
         if publisher_queues is not None:
