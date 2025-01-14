@@ -1,18 +1,56 @@
-"""Custom Docling Haystack converter module."""
+"""Docling Haystack batch converter module."""
 
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Optional, Union
 
-from docling.chunking import BaseChunker, HybridChunker
+from docling.chunking import BaseChunk, BaseChunker, HybridChunker
+from docling.datamodel.document import DoclingDocument
 from docling.document_converter import DocumentConverter
 from haystack import Document, component
 
-from docling_haystack.converter import ExportType, BaseMetaExtractor, MetaExtractor
 
-class DoclingConverter:
-    """Docling Haystack converter."""
+class ExportType(str, Enum):
+    """Enumeration of available export types."""
+
+    MARKDOWN = "markdown"
+    DOC_CHUNKS = "doc_chunks"
+
+
+class BaseMetaExtractor(ABC):
+    """BaseMetaExtractor."""
+
+    @abstractmethod
+    def extract_chunk_meta(self, chunk: BaseChunk) -> dict[str, Any]:
+        """Extract chunk meta."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def extract_dl_doc_meta(self, dl_doc: DoclingDocument) -> dict[str, Any]:
+        """Extract Docling document meta."""
+        raise NotImplementedError()
+
+
+class MetaExtractor(BaseMetaExtractor):
+    """MetaExtractor."""
+
+    def extract_chunk_meta(self, chunk: BaseChunk) -> dict[str, Any]:
+        """Extract chunk meta."""
+        return {"dl_meta": chunk.export_json_dict()}
+
+    def extract_dl_doc_meta(self, dl_doc: DoclingDocument) -> dict[str, Any]:
+        """Extract Docling document meta."""
+        return (
+            {"dl_meta": {"origin": dl_doc.origin.model_dump(exclude_none=True)}}
+            if dl_doc.origin
+            else {}
+        )
+
+
+@component
+class DoclingBatchConverter:
+    """Docling Haystack batch converter."""
 
     def __init__(
         self,
@@ -23,7 +61,7 @@ class DoclingConverter:
         chunker: Optional[BaseChunker] = None,
         meta_extractor: Optional[BaseMetaExtractor] = None,
     ):
-        """Create a Custom Docling Haystack converter. The run function is modified to take in a batch of URLs.
+        """Create a Docling Haystack converter.
 
         Args:
             converter: The Docling `DocumentConverter` to use; if not set, a system
@@ -57,12 +95,29 @@ class DoclingConverter:
             )
         self._meta_extractor = meta_extractor or MetaExtractor()
 
-    def run(self, links: list[str]):
-        documents: list[Document] = []
-        results = self._converter.convert_all(links, headers={"User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:124.0) Gecko/20100101 Firefox/124.0"})
+    @component.output_types(documents=list[Document])
+    def run(
+        self,
+        paths: Iterable[Union[Path, str]],
+    ):
+        """Run the DoclingConverter.
 
-        for result in results:
+        Args:
+            paths: The input document locations, either as local paths or URLs.
+
+        Returns:
+            list[Document]: The output Haystack Documents.
+        """
+        documents: list[Document] = []
+        
+        conversion_results = self._converter.convert_all(
+            source=paths,
+            **self._convert_kwargs
+        )
+
+        for result in conversion_results:
             dl_doc = result.document
+
             if self._export_type == ExportType.DOC_CHUNKS:
                 chunk_iter = self._chunker.chunk(dl_doc=dl_doc)
                 hs_docs = [
@@ -81,4 +136,5 @@ class DoclingConverter:
                 documents.append(hs_doc)
             else:
                 raise RuntimeError(f"Unexpected export type: {self._export_type}")
-        return documents 
+
+        return {"documents": documents}
