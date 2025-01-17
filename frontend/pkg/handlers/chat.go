@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/johngerving/ask-alex.git/pkg/templates"
 	"github.com/johngerving/ask-alex.git/pkg/views"
@@ -88,7 +87,7 @@ func ChatPageHandler(c echo.Context) error {
 // GET /chat/messages
 // Sends server-sent events to the client with any new
 // messages
-func ChatMessageHandler(c echo.Context) error {
+func ChatMessageGETHandler(c echo.Context) error {
 	l := c.Echo().Logger
 	l.Info("SSE client connected, ip: %v", c.RealIP())
 
@@ -97,26 +96,50 @@ func ChatMessageHandler(c echo.Context) error {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-c.Request().Context().Done():
-			l.Info("SSE client disconnected, ip: %v", c.RealIP())
-			return nil
-		case <-ticker.C:
-			component, err := templates.TemplateToBytes(templates.ChatBubble())
-			if err != nil {
-				return err
-			}
+	return nil
+	// ticker := time.NewTicker(1 * time.Second)
+	// defer ticker.Stop()
+	// for {
+	// 	select {
+	// 	case <-c.Request().Context().Done():
+	// 		l.Info("SSE client disconnected, ip: %v", c.RealIP())
+	// 		return nil
+	// 	case <-ticker.C:
+	// 		component, err := templates.TemplateToBytes(templates.ChatBubble())
+	// 		if err != nil {
+	// 			return err
+	// 		}
 
-			event := Event{
-				Data: component,
-			}
-			if err := event.MarshalTo(w); err != nil {
-				return err
-			}
-			w.Flush()
-		}
+	// 		event := Event{
+	// 			Data: component,
+	// 		}
+	// 		if err := event.MarshalTo(w); err != nil {
+	// 			return err
+	// 		}
+	// 		w.Flush()
+	// 	}
+	// }
+}
+
+func ChatMessagePOSTHandler(c echo.Context) error {
+	l := c.Logger()
+
+	vals, err := c.FormParams()
+
+	if err != nil {
+		l.Errorf("Could not get form parameters: %v", err)
+		return fmt.Errorf("invalid form parameters")
 	}
+	if vals.Get("message") == "" {
+		return nil
+	}
+
+	chatBubbleComponent := templates.ChatBubble(vals.Get("message"), true)
+	err = chatBubbleComponent.Render(context.Background(), c.Response().Writer)
+	if err != nil {
+		return err
+	}
+
+	chatFormComponent := templates.ChatForm()
+	return chatFormComponent.Render(context.Background(), c.Response().Writer)
 }

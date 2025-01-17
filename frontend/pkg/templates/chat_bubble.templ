@@ -1,13 +1,16 @@
 package templates
 
-templ ChatBubble() {
-    <div class="w-full flex justify-start">
-        <div class="flex flex-col w-full max-w-[320px] leading-1.5 p-4 border-gray-200 bg-gray-100 rounded-e-xl rounded-es-xl">
+// ChatBubble returns a Templ component containing a chat bubble.
+// If isUserMessage is true, the bubble is displayed on the right 
+// side of the screen. Otherwise, it is displayed on the left.
+templ ChatBubble(message string, isUserMessage bool) {
+    <div class={"chat-bubble w-full flex", templ.KV("justify-end", isUserMessage)}>
+        <div class={"flex flex-col w-full max-w-xl leading-1.5 p-4 border-gray-200 bg-gray-100", templ.KV("rounded-r-xl rounded-b-xl", !isUserMessage), templ.KV("rounded-l-xl rounded-b-xl", isUserMessage)}>
             <div class="flex items-center space-x-2 rtl:space-x-reverse">
                 <span class="text-sm font-semibold text-gray-900">User</span>
                 <span class="text-sm font-normal text-gray-500">11:46</span>
             </div>
-            <p class="text-sm font-normal py-2.5 text-gray-900">That's awesome. I think our users will really appreciate the improvements.</p>
+            <p class="text-sm font-normal py-2.5 text-gray-900">{message}</p>
         </div>
     </div>
 }

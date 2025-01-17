@@ -12,7 +12,7 @@ templ Page(title string) {
         <script src="/static/js/sse.js"></script>
         <title>{title}</title>
     </head>
-    <body>
+    <body hx-boost="true">
        { children... } 
     </body>
     </html>
