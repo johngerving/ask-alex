@@ -134,6 +134,8 @@ func ChatMessagePOSTHandler(c echo.Context) error {
 		return nil
 	}
 
+	l.Printf("Message: %v", vals.Get("message"))
+
 	chatBubbleComponent := templates.ChatBubble(vals.Get("message"), true)
 	err = chatBubbleComponent.Render(context.Background(), c.Response().Writer)
 	if err != nil {
