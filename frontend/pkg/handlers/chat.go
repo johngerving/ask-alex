@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/johngerving/ask-alex.git/pkg/templates"
 	"github.com/johngerving/ask-alex.git/pkg/views"
@@ -84,10 +85,10 @@ func ChatPageHandler(c echo.Context) error {
 	return views.Chat().Render(context.Background(), c.Response().Writer)
 }
 
-// GET /chat/messages
-// Sends server-sent events to the client with any new
-// messages
-func ChatMessageGETHandler(c echo.Context) error {
+// GET /chat/responses
+// Creates an LLM response and streams it to
+// the client
+func LLMResponseGETHandler(c echo.Context) error {
 	l := c.Echo().Logger
 	l.Info("SSE client connected, ip: %v", c.RealIP())
 
@@ -96,52 +97,48 @@ func ChatMessageGETHandler(c echo.Context) error {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	return nil
-	// ticker := time.NewTicker(1 * time.Second)
-	// defer ticker.Stop()
-	// for {
-	// 	select {
-	// 	case <-c.Request().Context().Done():
-	// 		l.Info("SSE client disconnected, ip: %v", c.RealIP())
-	// 		return nil
-	// 	case <-ticker.C:
-	// 		component, err := templates.TemplateToBytes(templates.ChatBubble())
-	// 		if err != nil {
-	// 			return err
-	// 		}
-
-	// 		event := Event{
-	// 			Data: component,
-	// 		}
-	// 		if err := event.MarshalTo(w); err != nil {
-	// 			return err
-	// 		}
-	// 		w.Flush()
-	// 	}
-	// }
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	message := ""
+	for {
+		select {
+		case <-c.Request().Context().Done():
+			l.Info("SSE client disconnected, ip: %v", c.RealIP())
+			return nil
+		case <-ticker.C:
+			message += "test "
+			event := Event{
+				Event: []byte("message"),
+				Data:  []byte(message),
+			}
+			if err := event.MarshalTo(w); err != nil {
+				return err
+			}
+			w.Flush()
+		}
+	}
 }
 
+// POST /chat/messages
 func ChatMessagePOSTHandler(c echo.Context) error {
 	l := c.Logger()
 
 	vals, err := c.FormParams()
 
-	if err != nil {
+	if err != nil || vals.Get("message") == "" {
 		l.Errorf("Could not get form parameters: %v", err)
 		return fmt.Errorf("invalid form parameters")
-	}
-	if vals.Get("message") == "" {
-		return nil
 	}
 
 	l.Printf("Message: %v", vals.Get("message"))
 
-	chatBubbleComponent := templates.ChatBubble(vals.Get("message"), true)
-	err = chatBubbleComponent.Render(context.Background(), c.Response().Writer)
-	if err != nil {
-		return err
-	}
-
+	chatBubbleComponent := templates.ChatBubble(vals.Get("message"), true, false)
+	llmResponseComponent := templates.ChatBubble("", false, true)
 	chatFormComponent := templates.ChatForm()
-	return chatFormComponent.Render(context.Background(), c.Response().Writer)
+
+	chatBubbleComponent.Render(context.Background(), c.Response().Writer)
+	llmResponseComponent.Render(context.Background(), c.Response().Writer)
+	chatFormComponent.Render(context.Background(), c.Response().Writer)
+
+	return nil
 }

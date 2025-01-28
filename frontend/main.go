@@ -14,7 +14,7 @@ func main() {
 	e.Use(middleware.Logger())
 
 	e.GET("/chat", handlers.ChatPageHandler)
-	e.GET("/chat/messages", handlers.ChatMessageGETHandler)
+	e.GET("/chat/responses", handlers.LLMResponseGETHandler)
 	e.POST("/chat/messages", handlers.ChatMessagePOSTHandler)
 
 	e.Start(":8080")

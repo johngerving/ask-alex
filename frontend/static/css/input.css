@@ -1,3 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@font-face {
+    font-family: "Inter Fallback";
+    src: local("Arial");
+    ascent-override: 90.49%;
+    descent-override: 22.56%;
+    line-gap-override: 0%;
+    size-adjust: 107.06%;
+}
+
+@theme {
+    --font-sans: InterVariable, "Inter Fallback";
+}

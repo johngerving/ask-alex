@@ -48,7 +48,7 @@ func Chat() templ.Component {
 				return templ_7745c5c3_Err
 			}
 			for _ = range 10 {
-				templ_7745c5c3_Err = templates.ChatBubble("Sit culpa id aliqua sunt magna sit Lorem sint adipisicing et commodo esse. Labore amet culpa ut elit voluptate magna labore incididunt incididunt consectetur. Irure culpa dolor eiusmod sint laborum mollit magna ut. Pariatur deserunt veniam ea mollit cillum eiusmod cupidatat velit et. Minim consectetur reprehenderit aliquip aute occaecat est qui ullamco sit. Amet commodo aliquip in nisi veniam amet laborum occaecat minim cupidatat ex. Consequat consequat pariatur in ad consectetur aliquip esse consectetur deserunt.", false).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = templates.ChatBubble("Sit culpa id aliqua sunt magna sit Lorem sint adipisicing et commodo esse. Labore amet culpa ut elit voluptate magna labore incididunt incididunt consectetur. Irure culpa dolor eiusmod sint laborum mollit magna ut. Pariatur deserunt veniam ea mollit cillum eiusmod cupidatat velit et. Minim consectetur reprehenderit aliquip aute occaecat est qui ullamco sit. Amet commodo aliquip in nisi veniam amet laborum occaecat minim cupidatat ex. Consequat consequat pariatur in ad consectetur aliquip esse consectetur deserunt.", false, false).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -56,7 +56,7 @@ func Chat() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templates.ChatBubble("Nostrud officia nostrud id eu minim elit esse. Nulla ad cupidatat sunt nisi proident eu consectetur elit adipisicing veniam anim pariatur. Do amet cupidatat tempor fugiat adipisicing labore officia. Velit sit minim ea enim aute ea consequat consectetur qui nostrud nisi magna pariatur. Officia sint aute ea exercitation amet est proident. Tempor sit anim labore quis Lorem dolore sint laboris dolor et non elit.", true).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = templates.ChatBubble("Nostrud officia nostrud id eu minim elit esse. Nulla ad cupidatat sunt nisi proident eu consectetur elit adipisicing veniam anim pariatur. Do amet cupidatat tempor fugiat adipisicing labore officia. Velit sit minim ea enim aute ea consequat consectetur qui nostrud nisi magna pariatur. Officia sint aute ea exercitation amet est proident. Tempor sit anim labore quis Lorem dolore sint laboris dolor et non elit.", true, false).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

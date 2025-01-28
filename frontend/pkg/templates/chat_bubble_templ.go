@@ -11,7 +11,9 @@ import templruntime "github.com/a-h/templ/runtime"
 // ChatBubble returns a Templ component containing a chat bubble.
 // If isUserMessage is true, the bubble is displayed on the right
 // side of the screen. Otherwise, it is displayed on the left.
-func ChatBubble(message string, isUserMessage bool) templ.Component {
+// If the message is updating, it streams an LLM response from
+// the server.
+func ChatBubble(message string, isUserMessage bool, isUpdating bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -72,14 +74,24 @@ func ChatBubble(message string, isUserMessage bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"flex items-center space-x-2 rtl:space-x-reverse\"><span class=\"text-sm font-semibold text-gray-900\">User</span> <span class=\"text-sm font-normal text-gray-500\">11:46</span></div><p class=\"whitespace-pre-line text-sm font-normal py-2.5 text-gray-900\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"flex items-center space-x-2 rtl:space-x-reverse\"><span class=\"text-sm font-semibold text-gray-900\">User</span></div><p class=\"whitespace-pre-line text-sm font-normal py-2.5 text-gray-900\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if !isUserMessage && isUpdating {
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(" hx-ext=\"sse\" sse-connect=\"/chat/responses\" sse-swap=\"message\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `pkg/templates/chat_bubble.templ`, Line: 13, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `pkg/templates/chat_bubble.templ`, Line: 18, Col: 21}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
