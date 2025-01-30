@@ -91,5 +91,5 @@ def index_documents():
         DocumentIndexer, 
         batch_size=32, 
         num_gpus=1,     # 1 GPU per worker
-        concurrency=8   # 8 workers
+        concurrency=4   # 4 workers
     ).materialize()

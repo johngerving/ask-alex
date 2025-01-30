@@ -98,7 +98,7 @@ def convert_documents(ds: ray.data.Dataset):
     # Convert PDFs to markdown documents
     ds = ds.map_batches(
         Converter,
-        concurrency=8, # Run 8 workers 
+        concurrency=4, # Run 4 workers 
         batch_size=32, # Send batches of 32 links
         num_gpus=1     # Use 1 GPU per worker
     )
