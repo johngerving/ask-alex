@@ -1,21 +1,18 @@
 package main
 
 import (
-	"github.com/johngerving/ask-alex.git/pkg/handlers"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"log"
+
+	"github.com/johngerving/ask-alex.git/pkg/app"
 )
 
 func main() {
-	e := echo.New()
+	a, err := app.New()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	e.Static("/static", "static")
-
-	e.Use(middleware.Logger())
-
-	e.GET("/chat", handlers.ChatPageHandler)
-	e.GET("/chat/responses", handlers.LLMResponseGETHandler)
-	e.POST("/chat/messages", handlers.ChatMessagePOSTHandler)
-
-	e.Start(":8080")
+	if err := a.Start(); err != nil {
+		log.Fatal(err)
+	}
 }
