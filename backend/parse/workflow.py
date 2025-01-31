@@ -12,9 +12,6 @@ import json
 
 ray.init()
 
-ray_data_logger = logging.getLogger("ray.data")
-ray_data_logger.setLevel(logging.WARNING)
-
 # Get runtime environment to pass to workflow tasks
 runtime_env = json.loads(ray.get_runtime_context().get_runtime_env_string())
 

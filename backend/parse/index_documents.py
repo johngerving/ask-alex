@@ -15,6 +15,7 @@ from docling.datamodel.base_models import InputFormat
 
 
 from haystack import Pipeline, Document
+from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.writers import DocumentWriter
 import ray.data
@@ -28,6 +29,7 @@ class DocumentIndexer:
 
         from haystack import Pipeline
         from haystack.components.embedders import SentenceTransformersDocumentEmbedder
+        from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
         from haystack.components.writers import DocumentWriter
         from haystack.utils import Secret
 
@@ -43,11 +45,17 @@ class DocumentIndexer:
 
         # Create a Haystack pipeline to index the documents
         self.pipeline = Pipeline()
+        # Clean the documents
+        self.pipeline.add_component("cleaner", DocumentCleaner(remove_empty_lines=True, remove_repeated_substrings=True))
+        # Split them by paragraph
+        self.pipeline.add_component("splitter", DocumentSplitter(split_by="sentence", split_length=5))
         # Pipeline step to create document embeddings
         self.pipeline.add_component("embedder", SentenceTransformersDocumentEmbedder())
         # Pipeline step to write the documents to our PgvectorDocumentStore
         self.pipeline.add_component("writer", DocumentWriter(document_store))
 
+        self.pipeline.connect("cleaner.documents", "splitter.documents")
+        self.pipeline.connect("splitter.documents", "embedder.documents")
         self.pipeline.connect("embedder", "writer")
 
     def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
@@ -67,7 +75,10 @@ class DocumentIndexer:
         print(f"Processing batch of size {len(documents)}")
         try:
             # Run the pipeline on the batch received
-            self.pipeline.run(data={"documents": documents})
+            res = self.pipeline.run({"cleaner": {"documents": documents}}, include_outputs_from={"splitter"})
+            import logging
+            logger = logging.getLogger("ray")
+            logger.info(res)
         except Exception as e:
             print("Error:", e)
         
