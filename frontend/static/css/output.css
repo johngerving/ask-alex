@@ -713,10 +713,19 @@
       }
     }
   }
-  .\[\&amp\;_ul\]\:text-4xl {
-    &amp; ul {
-      font-size: var(--text-4xl);
-      line-height: var(--tw-leading, var(--text-4xl--line-height));
+  .\[\&_ol\]\:list-item {
+    & ol {
+      display: list-item;
+    }
+  }
+  .\[\&_ul\]\:list-inside {
+    & ul {
+      list-style-position: inside;
+    }
+  }
+  .\[\&_ul\]\:list-disc {
+    & ul {
+      list-style-type: disc;
     }
   }
 }

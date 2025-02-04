@@ -20,6 +20,7 @@ from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.writers import DocumentWriter
 import ray.data
 from haystack.utils import Secret
+from haystack.utils import ComponentDevice, Device
 
 import ray
 
@@ -48,9 +49,9 @@ class DocumentIndexer:
         # Clean the documents
         self.pipeline.add_component("cleaner", DocumentCleaner(remove_empty_lines=True, remove_repeated_substrings=True))
         # Split them by paragraph
-        self.pipeline.add_component("splitter", DocumentSplitter(split_by="sentence", split_length=5))
+        self.pipeline.add_component("splitter", DocumentSplitter(split_by="word", split_length=200, split_overlap=50))
         # Pipeline step to create document embeddings
-        self.pipeline.add_component("embedder", SentenceTransformersDocumentEmbedder())
+        self.pipeline.add_component("embedder", SentenceTransformersDocumentEmbedder(device=ComponentDevice.from_single(Device.gpu())))
         # Pipeline step to write the documents to our PgvectorDocumentStore
         self.pipeline.add_component("writer", DocumentWriter(document_store))
 
@@ -76,9 +77,6 @@ class DocumentIndexer:
         try:
             # Run the pipeline on the batch received
             res = self.pipeline.run({"cleaner": {"documents": documents}}, include_outputs_from={"splitter"})
-            import logging
-            logger = logging.getLogger("ray")
-            logger.info(res)
         except Exception as e:
             print("Error:", e)
         

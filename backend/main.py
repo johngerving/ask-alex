@@ -33,7 +33,7 @@ class HaystackQA:
                     You are ALEX, a helpful AI assistant designed to provide information about Humboldt-related documents.
 
                     Create a concise and informative answer (no more than 50 words) for a given query based solely on the given documents.
-                    You must only use information from the given documents. Use an unbiased and journalistic tone. Do not repeat text.
+                    You must only use information from the given documents. Use an unbiased and journalistic tone. Do not repeat text. If the question is not related to any documents, respond to the question without referring to the documents.
 
                     Given the following information, answer the query.
 
@@ -60,7 +60,7 @@ class HaystackQA:
         )
 
         # Retriever to get embedding vectors based on query
-        retriever = PgvectorEmbeddingRetriever(document_store=document_store, top_k=5)
+        retriever = PgvectorEmbeddingRetriever(document_store=document_store, top_k=8)
 
         self.chat_pipeline = Pipeline()
         self.chat_pipeline.add_component("embedder", SentenceTransformersTextEmbedder()) # Embed the user's query to compare to vector DB
@@ -76,8 +76,9 @@ class HaystackQA:
         query: str = str(await request.body())
 
         # Run the pipeline with the user's query
-        res = self.chat_pipeline.run({"embedder": {"text": query}, "prompt_builder": {"query": query}})
+        res = self.chat_pipeline.run({"embedder": {"text": query}, "prompt_builder": {"query": query}}, include_outputs_from={"retriever"})
         replies = res["llm"]["replies"]
+        # replies = ""
         if replies:
             return replies[0].text
 

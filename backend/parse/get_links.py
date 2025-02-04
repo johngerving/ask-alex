@@ -15,7 +15,7 @@ import logging
 
 # get_links returns a dataset containing a list of links to PDFs from Digital Commons
 @ray.remote
-def get_links() -> ray.data.Dataset:
+def get_links() -> ray.data.Dataset: #-> is type hinting a "moderate" typing paradigm 
     '''
     Gets a ray.data.Dataset containing a list of valid links to PDFs from Digital Commons.
 
@@ -43,6 +43,8 @@ def dataset_from_digitalcommons() -> ray.data.Dataset:
     Returns:
         ray.data.Dataset: A dataset containing links to PDFs from Digital Commons.
     '''
+    # the imports are inside the functions because Ray requires is because the different functions are in
+    #different environments
     import numpy as np
 
     import requests
@@ -51,8 +53,10 @@ def dataset_from_digitalcommons() -> ray.data.Dataset:
     from pyarrow import fs
 
     import logging
+    
 
     logger = logging.getLogger("ray")
+    
 
     # Create a filesystem to store the converted documents in
     filesys = fs.S3FileSystem(endpoint_override=os.getenv("AWS_ENDPOINT_URL"))
