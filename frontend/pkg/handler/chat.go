@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -29,18 +30,22 @@ func ChatPageGET() echo.HandlerFunc {
 // The client will then receive events from the stream STREAM_ID.
 func LLMResponseGET(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		// Get stream ID from query params
 		streamID := c.Request().URL.Query().Get("stream")
 		if streamID == "" {
 			http.Error(c.Response().Writer, "Please specify a stream!", http.StatusInternalServerError)
 			return fmt.Errorf("stream not specified")
 		}
+
 		// TODO: Add user authentication to message route
 		go func() {
 			<-c.Request().Context().Done() // Received Browser Disconnection
 			l.Info("Client disconnected")
+			// When the client disconnects, remove the stream they were connected to
 			sseServer.RemoveStream(streamID)
 		}()
 
+		// Create an HTTP connections to send events from the stream specified in the URL query param
 		sseServer.ServeHTTP(c.Response().Writer, c.Request())
 		return nil
 	}
@@ -76,10 +81,10 @@ func ChatMessagePOST(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 		chatFormComponent.Render(context.Background(), c.Response().Writer)
 
 		go func(s *sse.Server) {
-			// defer sseServer.RemoveStream(streamID)
+			// After everything is done, send a message to close the connection
 			defer s.Publish(streamID, &sse.Event{
 				Event: []byte("done"),
-				Data:  []byte("test"),
+				Data:  []byte("done"),
 			})
 
 			reqBody := strings.NewReader(vals.Get("message"))
@@ -104,21 +109,28 @@ func ChatMessagePOST(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 				return
 			}
 
-			// Convert markdown from LLM to HTML
-			llmResponseHTML := bluemonday.UGCPolicy().SanitizeBytes(markdown.ToHTML(bodyBytes, nil, nil))
-			llmResponseHTML = []byte(strings.Replace(string(llmResponseHTML), "\n", "<br>", -1))
+			// Convert and clean LLM output
 
-			l.Info(streamID)
+			// Convert LLM output to HTML (sanitize it just in case)
+			llmResponseHTML := bluemonday.UGCPolicy().SanitizeBytes(markdown.ToHTML(bodyBytes, nil, nil))
+			llmResponseHTMLString := string(llmResponseHTML)
+
+			// Remove leading and trailing whitespace from output
+			llmResponseHTMLString = strings.TrimSpace(llmResponseHTMLString)
+
+			// Reduce double newlines to single newlines
+			rg := regexp.MustCompile(`(\r\n?|\n){2,}`)
+			llmResponseHTMLString = rg.ReplaceAllString(llmResponseHTMLString, "$1")
+
+			// Replace newlines with <br> - otherwise, SSE events will be broken by \n
+			llmResponseHTMLString = strings.Replace(llmResponseHTMLString, "\n", "<br>", -1)
+			llmResponseHTML = []byte(llmResponseHTMLString)
+
 			// Publish the response to the SSE stream
 			s.Publish(streamID, &sse.Event{
 				Event: []byte("message"),
 				Data:  llmResponseHTML,
 			})
-
-			l.Info(streamID)
-			// Publish another event saying that we're done - this time, send the entire chat bubble component so that the
-			// client doesn't keep listening on the stream
-			l.Info("done")
 		}(sseServer)
 
 		return nil

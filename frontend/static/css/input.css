@@ -12,3 +12,8 @@
 @theme {
     --font-sans: InterVariable, "Inter Fallback";
 }
+
+.chat-bubble ul, ol {
+    list-style: revert;
+    padding-inline-start: revert;
+}

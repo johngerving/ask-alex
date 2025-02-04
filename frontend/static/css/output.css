@@ -713,21 +713,6 @@
       }
     }
   }
-  .\[\&_ol\]\:list-item {
-    & ol {
-      display: list-item;
-    }
-  }
-  .\[\&_ul\]\:list-inside {
-    & ul {
-      list-style-position: inside;
-    }
-  }
-  .\[\&_ul\]\:list-disc {
-    & ul {
-      list-style-type: disc;
-    }
-  }
 }
 @font-face {
   font-family: "Inter Fallback";
@@ -736,6 +721,10 @@
   descent-override: 22.56%;
   line-gap-override: 0%;
   size-adjust: 107.06%;
+}
+.chat-bubble ul, ol {
+  list-style: revert;
+  padding-inline-start: revert;
 }
 @keyframes spin {
   to {

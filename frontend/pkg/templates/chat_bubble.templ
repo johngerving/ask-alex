@@ -13,7 +13,7 @@ templ ChatBubble(message string, isUserMessage bool, isUpdating bool, url string
             <div class="flex items-center space-x-2 rtl:space-x-reverse">
                 <span class="text-sm font-semibold text-gray-900">User</span>
             </div>
-            <div class="text-sm font-normal py-2.5 text-gray-900 [&_ul]:list-inside [&_ul]:list-disc [&_ol]:list-item" 
+            <div class="text-sm font-normal py-2.5 text-gray-900" 
                 if !isUserMessage {
                     hx-ext="sse" sse-connect={url} sse-swap="message" sse-close="done"
                 }

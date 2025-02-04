@@ -74,7 +74,7 @@ func ChatBubble(message string, isUserMessage bool, isUpdating bool, url string)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"flex items-center space-x-2 rtl:space-x-reverse\"><span class=\"text-sm font-semibold text-gray-900\">User</span></div><div class=\"text-sm font-normal py-2.5 text-gray-900 [&amp;_ul]:list-inside [&amp;_ul]:list-disc [&amp;_ol]:list-item\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"flex items-center space-x-2 rtl:space-x-reverse\"><span class=\"text-sm font-semibold text-gray-900\">User</span></div><div class=\"text-sm font-normal py-2.5 text-gray-900\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
