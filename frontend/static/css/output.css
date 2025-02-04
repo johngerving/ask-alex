@@ -671,9 +671,6 @@
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
-  .whitespace-pre-line {
-    white-space: pre-line;
-  }
   .text-gray-900 {
     color: var(--color-gray-900);
   }
@@ -714,6 +711,12 @@
       :where(& > :not(:last-child)) {
         --tw-space-x-reverse: 1;
       }
+    }
+  }
+  .\[\&amp\;_ul\]\:text-4xl {
+    &amp; ul {
+      font-size: var(--text-4xl);
+      line-height: var(--tw-leading, var(--text-4xl--line-height));
     }
   }
 }

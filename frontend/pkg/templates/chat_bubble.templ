@@ -8,22 +8,22 @@ package templates
 templ ChatBubble(message string, isUserMessage bool, isUpdating bool, url string) {
     <div 
         class={"chat-bubble w-full flex", templ.KV("justify-end", isUserMessage)}
-        if !isUserMessage && isUpdating {
-            hx-ext="sse"
-            sse-connect={url}
-            sse-swap="done"
-            hx-swap="outerHTML"
-        }
     >
         <div class={"flex flex-col w-full max-w-xl leading-1.5 p-4 border-gray-200 bg-gray-100", templ.KV("rounded-r-xl rounded-b-xl", !isUserMessage), templ.KV("rounded-l-xl rounded-b-xl", isUserMessage)}>
             <div class="flex items-center space-x-2 rtl:space-x-reverse">
                 <span class="text-sm font-semibold text-gray-900">User</span>
             </div>
-            <p class="whitespace-pre-line text-sm font-normal py-2.5 text-gray-900"
-                if !isUserMessage && isUpdating {
-                    hx-ext="sse" sse-connect={url} sse-swap="message" 
+            <div class="text-sm font-normal py-2.5 text-gray-900" 
+                if !isUserMessage {
+                    hx-ext="sse" sse-connect={url} sse-swap="message" sse-close="done"
                 }
-            >{message}</p>
+            >
+            if isUserMessage {
+                {message}
+            } else {
+                @templ.Raw(message)
+            }
+            </div>
         </div>
     </div>
 }

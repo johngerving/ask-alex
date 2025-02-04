@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gomarkdown/markdown"
 	"github.com/google/uuid"
 	"github.com/johngerving/ask-alex.git/pkg/templates"
 	"github.com/johngerving/ask-alex.git/pkg/views"
 	"github.com/labstack/echo/v4"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/r3labs/sse/v2"
 )
 
@@ -27,12 +29,19 @@ func ChatPageGET() echo.HandlerFunc {
 // The client will then receive events from the stream STREAM_ID.
 func LLMResponseGET(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		streamID := c.Request().URL.Query().Get("stream")
+		if streamID == "" {
+			http.Error(c.Response().Writer, "Please specify a stream!", http.StatusInternalServerError)
+			return fmt.Errorf("stream not specified")
+		}
 		// TODO: Add user authentication to message route
 		go func() {
 			<-c.Request().Context().Done() // Received Browser Disconnection
+			l.Info("Client disconnected")
+			sseServer.RemoveStream(streamID)
 		}()
 
-		sseServer.ServeHTTP(c.Response(), c.Request())
+		sseServer.ServeHTTP(c.Response().Writer, c.Request())
 		return nil
 	}
 }
@@ -66,8 +75,12 @@ func ChatMessagePOST(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 		llmResponseComponent.Render(context.Background(), c.Response().Writer)
 		chatFormComponent.Render(context.Background(), c.Response().Writer)
 
-		go func() {
-			defer sseServer.RemoveStream(streamID)
+		go func(s *sse.Server) {
+			// defer sseServer.RemoveStream(streamID)
+			defer s.Publish(streamID, &sse.Event{
+				Event: []byte("done"),
+				Data:  []byte("test"),
+			})
 
 			reqBody := strings.NewReader(vals.Get("message"))
 
@@ -91,24 +104,22 @@ func ChatMessagePOST(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 				return
 			}
 
+			// Convert markdown from LLM to HTML
+			llmResponseHTML := bluemonday.UGCPolicy().SanitizeBytes(markdown.ToHTML(bodyBytes, nil, nil))
+			llmResponseHTML = []byte(strings.Replace(string(llmResponseHTML), "\n", "<br>", -1))
+
+			l.Info(streamID)
 			// Publish the response to the SSE stream
-			sseServer.Publish(streamID, &sse.Event{
+			s.Publish(streamID, &sse.Event{
 				Event: []byte("message"),
-				Data:  bodyBytes,
+				Data:  llmResponseHTML,
 			})
 
+			l.Info(streamID)
 			// Publish another event saying that we're done - this time, send the entire chat bubble component so that the
 			// client doesn't keep listening on the stream
-			llmResponseComponent, err := templates.TemplateToBytes(templates.ChatBubble(string(bodyBytes), false, false, streamURL))
-			if err != nil {
-				l.Error(err.Error())
-			}
-
-			sseServer.Publish(streamID, &sse.Event{
-				Event: []byte("done"),
-				Data:  llmResponseComponent,
-			})
-		}()
+			l.Info("done")
+		}(sseServer)
 
 		return nil
 	}
