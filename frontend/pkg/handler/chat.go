@@ -72,8 +72,8 @@ func ChatMessagePOST(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 		sseServer.CreateStream(streamID)
 
 		// Initial components to return to the user
-		chatBubbleComponent := templates.ChatBubble(vals.Get("message"), true, false, "")
-		llmResponseComponent := templates.ChatBubble("", false, true, streamURL)
+		chatBubbleComponent := templates.UserChatBubble(vals.Get("message"))
+		llmResponseComponent := templates.LLMChatBubble("", streamURL)
 		chatFormComponent := templates.ChatForm()
 
 		chatBubbleComponent.Render(context.Background(), c.Response().Writer)
