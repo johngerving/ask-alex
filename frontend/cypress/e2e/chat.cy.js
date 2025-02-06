@@ -20,4 +20,12 @@ describe('Test chat page', () => {
     cy.get('#messages > :nth-child(2) > .flex-col', {timeout: 10000}).should('be.visible');
     cy.get('#message').should('have.value', '');
   })
+
+  it('Sends a message with enter', () => {
+    cy.get('#message').type('What is the capital of France?{enter}')
+    /* ==== Generated with Cypress Studio ==== */
+    cy.get('.justify-end > .flex-col').should('be.visible');
+    cy.get('.justify-end > .flex-col > .font-normal').should('have.text', 'What is the capital of France?');
+    /* ==== End Cypress Studio ==== */
+  })
 })
