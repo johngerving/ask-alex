@@ -25,29 +25,9 @@ class HaystackQA:
             generation_kwargs={"max_tokens": 512}
         )
 
-        # Prompt template used for every chat - insert documents from query pipeline
-        prompt_builder = ChatPromptBuilder(
-            template = [
-                ChatMessage.from_user(
-                    """
-                    You are ALEX, a helpful AI assistant designed to provide information about Humboldt-related documents.
-
-                    Create a concise and informative answer (no more than 50 words) for a given query based solely on the given documents.
-                    You must only use information from the given documents. Use an unbiased and journalistic tone. Do not repeat text. If the question is not related to any documents, respond to the question without referring to the documents.
-
-                    Given the following information, answer the query.
-
-                    Context:
-                    {% for document in documents %}
-                        {{ document.content }} 
-                    {% endfor %}
-
-                    Query: {{query}}
-                    Answer:
-                    """
-                )
-            ]
-        )
+        self.messages = [
+            ChatMessage.from_system("You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Respond to the input as a friendly AI assistant, generating human-like text, and follow the instructions in the input if applicable. Keep the response concise and engaging, using Markdown when appropriate. Use a conversational tone and provide helpful and informative responses, utilizing only the context provided to formulate answers.")
+        ]
 
         # Get the document store in Postgres
         document_store = PgvectorDocumentStore(
@@ -62,22 +42,45 @@ class HaystackQA:
         # Retriever to get embedding vectors based on query
         retriever = PgvectorEmbeddingRetriever(document_store=document_store, top_k=8)
 
-        self.chat_pipeline = Pipeline()
-        self.chat_pipeline.add_component("embedder", SentenceTransformersTextEmbedder()) # Embed the user's query to compare to vector DB
-        self.chat_pipeline.add_component("retriever", retriever) # Retrieve similar embeddings to get relevant documents
-        self.chat_pipeline.add_component("prompt_builder", prompt_builder) # Build the prompts using the user query and the documents retrieved
-        self.chat_pipeline.add_component("llm", generator) # Pass prompt to LLM
+        rag_template = [
+            ChatMessage.from_system(
+                """
+                Answer the questions based on the given context.
 
-        self.chat_pipeline.connect("embedder.embedding", "retriever.query_embedding")
-        self.chat_pipeline.connect("retriever", "prompt_builder.documents")
-        self.chat_pipeline.connect("prompt_builder.prompt", "llm.messages")
+                Context:
+                {% for document in documents %}
+                    {{ document.content }}
+                {% endfor %}
+                Question: {{ question }}
+                Answer:
+                """
+            )
+        ]
+
+        rag_prompt_builder = ChatPromptBuilder(template=rag_template)
+
+        self.rag_pipeline = Pipeline()
+        self.rag_pipeline.add_component("embedder", SentenceTransformersTextEmbedder()) # Embed the user's query to compare to vector DB
+        self.rag_pipeline.add_component("retriever", retriever) # Retrieve similar embeddings to get relevant documents
+        self.rag_pipeline.add_component("prompt_builder", prompt_builder)
+        self.rag_pipeline.add_component("llm", generator)
+
+        self.rag_pipeline.connect("embedder.embedding", "retriever.query_embedding")
+        self.rag_pipeline.connect("retriever", "prompt_builder.documents")
+        self.rag_pipeline.connect("prompt_builder.prompt", "llm.messages")
+
+
+        self.chat_pipeline = Pipeline()
+        self.chat_pipeline.add_component("llm", generator) # Pass prompt to LLM
 
     async def __call__(self, request: Request) -> str:
         query: str = str(await request.body())
 
         # Run the pipeline with the user's query
-        res = self.chat_pipeline.run({"embedder": {"text": query}, "prompt_builder": {"query": query}}, include_outputs_from={"retriever"})
+        # res = self.chat_pipeline.run({"embedder": {"text": query}, "prompt_builder": {"query": query}}, include_outputs_from={"retriever"})
+        res = self.chat_pipeline.run({"llm": {"messages": self.messages + [ChatMessage.from_user(query)]}})
         replies = res["llm"]["replies"]
+
         # replies = ""
         if replies:
             return replies[0].text
