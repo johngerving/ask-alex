@@ -115,6 +115,10 @@ func ChatMessagePOST(l *slog.Logger, sseServer *sse.Server) echo.HandlerFunc {
 			llmResponseHTML := bluemonday.UGCPolicy().SanitizeBytes(markdown.ToHTML(bodyBytes, nil, nil))
 			llmResponseHTMLString := string(llmResponseHTML)
 
+			// Remove code blocks from output
+			llmResponseHTMLString = strings.Replace(llmResponseHTMLString, "```", "", -1)
+			llmResponseHTMLString = strings.Replace(llmResponseHTMLString, "~~~", "", -1)
+
 			// Remove leading and trailing whitespace from output
 			llmResponseHTMLString = strings.TrimSpace(llmResponseHTMLString)
 
