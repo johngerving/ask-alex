@@ -10,14 +10,14 @@
 		...restProps
 	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> = $props();
 
-	function updateHeight(e: Event) {
-		let textarea = e.currentTarget;
+	$effect(() => {
+		value;
 
-		if (textarea instanceof HTMLTextAreaElement) {
-			textarea.style.height = '';
-			textarea.style.height = Math.min(textarea.scrollHeight + 2, 136) + 'px';
+		if (ref instanceof HTMLTextAreaElement) {
+			ref.style.height = '';
+			ref.style.height = Math.min(ref.scrollHeight + 2, 136) + 'px';
 		}
-	}
+	});
 </script>
 
 <textarea
@@ -27,6 +27,5 @@
 		className
 	)}
 	bind:value
-	oninput={updateHeight}
 	{...restProps}
 ></textarea>
