@@ -1,13 +1,21 @@
 <script lang="ts" module>
+	import type { Message } from '$lib/types/message';
+	import { MessageType } from '$lib/types/message';
+
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Messages } from '$lib/components/chat/Messages';
 	import { MessageInput } from '$lib/components/chat/MessageInput';
 
 	let messages: Message[] = $state([
 		{
-			content: 'Test'
+			content: 'Test',
+			type: MessageType.User
 		}
 	]);
+
+	const addMessage = (message: Message) => {
+		messages.push(message);
+	};
 </script>
 
 <Card.Root class="flex h-full w-full flex-col">
@@ -18,6 +26,6 @@
 		<Messages {messages} />
 	</Card.Content>
 	<Card.Footer class="w-full">
-		<MessageInput {messages} />
+		<MessageInput {addMessage} />
 	</Card.Footer>
 </Card.Root>

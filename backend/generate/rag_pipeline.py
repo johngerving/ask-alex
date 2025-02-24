@@ -16,7 +16,6 @@ from typing import Dict
 
 class RagPipeline:
     def __init__(self):
-        pass
         # Initialize LLM generators for different parts of the pipeline - they will all call the same API endpoint
         rag_classifier_llm = self._llm_component()
         rag_llm = self._llm_component()
