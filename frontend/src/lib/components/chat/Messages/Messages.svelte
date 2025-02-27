@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ChatBubble } from '$lib/components/ui/chatbubble';
+	import type { Message } from '$lib/types/message';
 	import { scrollToBottom } from '$lib/utils/chat/scrollToBottom';
 
 	let { messages }: { messages: Message[] } = $props();

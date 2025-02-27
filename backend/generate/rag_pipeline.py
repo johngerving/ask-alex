@@ -6,6 +6,7 @@ from haystack.dataclasses import ChatMessage
 from haystack.components.builders import ChatPromptBuilder
 from haystack.components.embedders import SentenceTransformersTextEmbedder
 from haystack.components.routers import ConditionalRouter
+from haystack.components.converters import OutputAdapter
 from haystack_integrations.document_stores.pgvector import PgvectorDocumentStore
 from haystack_integrations.components.retrievers.pgvector import PgvectorEmbeddingRetriever
 from haystack.tools import Tool
@@ -75,6 +76,24 @@ class RagPipeline:
 
         rag_classifier_router = ConditionalRouter(rag_classifier_routes)
 
+        rag_contextualizer_prompt_builder = ChatPromptBuilder(
+            [
+                ChatMessage.from_user(
+                    """
+                    Given a chat history and the latest user question which might reference context in the chat history, formulate a standalone question which can be understood without the chat history. Do NOT answer the question, just reformulate it if needed and otherwise return it as is.
+                    
+                    Conversation history:
+                    {% for memory in memories %}
+                        {{ memory.text }}
+                    {% endfor %}
+
+                    User Query: {{ query }}
+                    Rewritten Query:
+                    """
+                ),
+            ]
+        )
+
         # If LLM chooses rag, make a template for utilizing the retrieved documents in the LLM context
         rag_template = [
             ChatMessage.from_system(
@@ -124,6 +143,9 @@ class RagPipeline:
         self.pipeline.add_component("rag_classifier_router", rag_classifier_router) # Route query based on chat or RAG
 
         ##### RAG #####
+        self.pipeline.add_component("rag_contextualizer_prompt_builder", rag_contextualizer_prompt_builder)
+        self.pipeline.add_component("rag_contextualizer", self._llm_component())
+        self.pipeline.add_component("list_to_str_adapter", OutputAdapter(template="{{ replies[0] }}", output_type=str))
         self.pipeline.add_component("embedder", SentenceTransformersTextEmbedder()) # Get query vector embedding
         self.pipeline.add_component("retriever", retriever) # Retrieve similar documents
         self.pipeline.add_component("rag_prompt_builder", rag_prompt_builder) # Build prompt using query and retrieved documents
@@ -140,15 +162,22 @@ class RagPipeline:
         self.pipeline.connect("rag_classifier.valid_reply", "rag_classifier_router.valid_reply")
 
         self.pipeline.connect("rag_classifier_router.go_to_chat", "chat_prompt_builder.query")
-        self.pipeline.connect("rag_classifier_router.go_to_rag", "embedder.text")
-        self.pipeline.connect("rag_classifier_router.go_to_rag", "rag_prompt_builder.query")
+        self.pipeline.connect("rag_classifier_router.go_to_rag", "rag_contextualizer_prompt_builder.query")
+        self.pipeline.connect("rag_contextualizer_prompt_builder.prompt", "rag_contextualizer")
+        self.pipeline.connect("rag_contextualizer.replies", "list_to_str_adapter")
+        self.pipeline.connect("list_to_str_adapter", "embedder.text")
+        self.pipeline.connect("list_to_str_adapter", "rag_prompt_builder.query")
+
         self.pipeline.connect("embedder.embedding", "retriever.query_embedding")
         self.pipeline.connect("retriever", "rag_prompt_builder.documents")
         self.pipeline.connect("rag_prompt_builder.prompt", "rag_llm.messages")
         self.pipeline.connect("chat_prompt_builder.prompt", "chat_llm.messages")
 
-    def run(self, query: str):
-        res = self.pipeline.run({"prompt_builder_for_rag_classifier": {"passage": query}, "rag_classifier_router": {"query": query}})
+    def run(self, messages: list[ChatMessage]):
+        res = self.pipeline.run({"prompt_builder_for_rag_classifier": {"passage": messages[-1].text}, "rag_classifier_router": {"query": messages[-1].text}, "rag_contextualizer_prompt_builder": {"memories": messages[:-1]}}, include_outputs_from={"rag_contextualizer_prompt_builder", "rag_prompt_builder"})
+        import logging
+        logger = logging.getLogger("ray.serve")
+        logger.info(res)
         return res
 
     def _llm_component(
