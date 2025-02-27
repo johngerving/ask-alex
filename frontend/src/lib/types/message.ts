@@ -1,6 +1,6 @@
 export enum MessageType {
-	User,
-	Assistant
+	User = "user",
+	Assistant = "assistant"
 }
 
 export interface Message {

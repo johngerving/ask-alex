@@ -2,12 +2,13 @@
 	import type { Message } from '$lib/types/message';
 	import { MessageType } from '$lib/types/message';
 
-	import { PUBLIC_RAG_ENDPOINT } from '$env/static/public';
 	import { Button } from '$lib/components/ui/button';
 	import { ChatTextarea } from '$lib/components/ui/chattextarea';
 	import MaterialSymbolsSendOutlineRounded from '~icons/material-symbols/send-outline-rounded';
+	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
-	let { addMessage }: { addMessage: (m: Message) => void } = $props();
+	let { messages, addMessage }: { messages: Message[]; addMessage: (m: Message) => void } =
+		$props();
 
 	let text = $state('');
 
@@ -30,24 +31,16 @@
 			type: MessageType.User
 		});
 
-		const res = fetch(PUBLIC_RAG_ENDPOINT, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ query: text })
-		});
+		const responsePromise = sendMessages(messages);
 
 		// Reset the input content
 		text = '';
 
-		const json = await (await res).json();
-		const response = json.response;
+		// Wait for assistant to respond
+		const assistantResponse = await responsePromise;
 
-		addMessage({
-			content: response,
-			type: MessageType.Assistant
-		});
+		// Add message with assistant response
+		addMessage(assistantResponse);
 	}
 </script>
 

@@ -26,6 +26,6 @@
 		<Messages {messages} />
 	</Card.Content>
 	<Card.Footer class="w-full">
-		<MessageInput {addMessage} />
+		<MessageInput {messages} {addMessage} />
 	</Card.Footer>
 </Card.Root>

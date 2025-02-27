@@ -3,6 +3,7 @@
 	import { MessageType } from '$lib/types/message';
 	let { message }: { message: Message } = $props();
 
+	// Display message differently if message is a user message vs. assistant message
 	let isUser: boolean = $derived(message.type === MessageType.User);
 </script>
 
