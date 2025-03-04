@@ -1,4 +1,5 @@
 import os
+import re
 
 from haystack.dataclasses import ChatMessage
 from rag_pipeline import RagPipeline
@@ -76,9 +77,14 @@ class HaystackQA:
             raise Exception("No LLM output found")
 
         if replies:
-            return RAGResponse(response=replies[0].text)
+            response = replies[0].text
+        else:
+            response = ""
 
-        return RAGResponse()
+        response = response.strip()
+        response = re.sub(r'\n\s*\n', '\n\n', response)
+
+        return RAGResponse(response=response)
 
 haystack_deployment = HaystackQA.bind()
 # query = "What are the impacts of ammonium phosphate-based fire retardants on cyanobacteria growth?"

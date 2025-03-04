@@ -2,7 +2,7 @@ import os
 
 from haystack.utils import Secret
 from haystack.components.generators.chat import OpenAIChatGenerator
-from haystack.dataclasses import ChatMessage
+from haystack.dataclasses import ChatMessage, ChatRole
 from haystack.components.builders import ChatPromptBuilder
 from haystack.components.embedders import SentenceTransformersTextEmbedder
 from haystack.components.routers import ConditionalRouter
@@ -11,14 +11,14 @@ from haystack_integrations.document_stores.pgvector import PgvectorDocumentStore
 from haystack_integrations.components.retrievers.pgvector import PgvectorEmbeddingRetriever
 from haystack.tools import Tool
 from haystack import Pipeline
-from rag_classifier import RAGClassifier
+from intent_classifier import IntentClassifier
 
 from typing import Dict
 
 class RagPipeline:
     def __init__(self):
         # Initialize LLM generators for different parts of the pipeline - they will all call the same API endpoint
-        rag_classifier_llm = self._llm_component()
+        intent_classifier_llm = self._llm_component()
         rag_llm = self._llm_component()
         chat_llm = self._llm_component()
 
@@ -35,46 +35,79 @@ class RagPipeline:
         # Retriever to get embedding vectors based on query
         retriever = PgvectorEmbeddingRetriever(document_store=document_store, top_k=8)
 
-        # Template for classifying query as chat or rag
-        chat_rag_template = [
+        classes = {
+            "(a)": "chat - use for conversational messages that don't require outside information or previous context to answer.",
+            "(b)": "retrieval - use for messages that require retrieving information to answer the question.",
+        }
+        available_classes_string = ""
+        for c in classes:
+            available_classes_string += " ".join([c, classes[c]])
+
+        # Template for classifying query intent 
+        intent_template = [
             ChatMessage.from_user(
                 '''
-                You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Given a message, output 'chat' if the message is about you. Otherwise, output 'rag'.
+                You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Given a message, classify the intent of the user.
+
+                Available classes:
+                '''
+                +
+                available_classes_string
+                +
+                '''
 
                 Examples:
-                    In response to 'Who are you?', you should output 'chat'
-                    In response to 'What is the population of Humboldt County?', you should output 'rag'
+                    U: Who are you?
+                    Intention: (a)
 
-                Output 'chat' or 'rag' from the information present in this passage: {{passage}}.
-                Only use information that is present in the passage.
+                    U: How's it going?
+                    Intention: (a)
+
+                    U: What is the population of Humboldt County?
+                    Intention: (b)
+
+                    U: What are the symptoms of COVID-19 according to the latest research?
+                    Intention: (b)
+
+                    U: What are the top 5 best-selling books of 2024?
+                    Intention: (b)
+
+                    U: Tell me more.
+                    Intention: (b)
+
+
                 {% if invalid_replies and error_message %}
                 You already created the following output in a previous attempt: {{invalid_replies}}
                 However, this doesn't comply with the format requirements from above and triggered this Python exception: {{error_message}}
                 Correct the output and try again. Just return the corrected output without any extra explanations.
-                {% endif %}  
+                {% endif %} 
+
+                U: {{ passage }}
+                Intent: 
                 '''
             )
         ]
-        prompt_builder_for_rag_classifier = ChatPromptBuilder(template=chat_rag_template)
-        rag_classifier = RAGClassifier()
+        prompt_builder_for_intent_classifier = ChatPromptBuilder(template=intent_template)
+
+        intent_classifier = IntentClassifier(classes)
 
         # Based on classifier response, follow different route in pipeline
-        rag_classifier_routes = [
+        intent_classifier_routes = [
             {
-                "condition": "{{'chat' in valid_reply}}",
-                "output": "{{query}}",
+                "condition": "{{'(a)' in valid_reply}}",
+                "output": "{{ memories[-1] }}",
                 "output_name": "go_to_chat",
                 "output_type": str,
             },
             {
-                "condition": "{{'rag' in valid_reply}}",
-                "output": "{{query}}",
-                "output_name": "go_to_rag",
-                "output_type": str,
+                "condition": "{{'(b)' in valid_reply}}",
+                "output": "{{ memories }}",
+                "output_name": "go_to_retrieval",
+                "output_type": list[str],
             }
         ]
 
-        rag_classifier_router = ConditionalRouter(rag_classifier_routes)
+        intent_classifier_router = ConditionalRouter(intent_classifier_routes)
 
         rag_contextualizer_prompt_builder = ChatPromptBuilder(
             [
@@ -84,10 +117,9 @@ class RagPipeline:
                     
                     Conversation history:
                     {% for memory in memories %}
-                        {{ memory.text }}
+                        {{ memory }}
                     {% endfor %}
 
-                    User Query: {{ query }}
                     Rewritten Query:
                     """
                 ),
@@ -137,10 +169,10 @@ class RagPipeline:
         chat_prompt_builder = ChatPromptBuilder(template=chat_template)
 
         self.pipeline = Pipeline(max_runs_per_component=5)
-        self.pipeline.add_component("prompt_builder_for_rag_classifier", prompt_builder_for_rag_classifier) # Decide whether prompt is chat-based or RAG-based
-        self.pipeline.add_component("rag_classifier_llm", rag_classifier_llm) # Pass prompt to LLM
-        self.pipeline.add_component("rag_classifier", rag_classifier) 
-        self.pipeline.add_component("rag_classifier_router", rag_classifier_router) # Route query based on chat or RAG
+        self.pipeline.add_component("prompt_builder_for_intent_classifier", prompt_builder_for_intent_classifier) # Decide whether prompt is chat-based or RAG-based
+        self.pipeline.add_component("intent_classifier_llm", intent_classifier_llm) # Pass prompt to LLM
+        self.pipeline.add_component("intent_classifier", intent_classifier) 
+        self.pipeline.add_component("intent_classifier_router", intent_classifier_router) # Route query based on chat or RAG
 
         ##### RAG #####
         self.pipeline.add_component("rag_contextualizer_prompt_builder", rag_contextualizer_prompt_builder)
@@ -155,14 +187,14 @@ class RagPipeline:
         self.pipeline.add_component("chat_prompt_builder", chat_prompt_builder) # Build chat prompt from query
         self.pipeline.add_component("chat_llm", chat_llm) # Pass prompt to LLM
 
-        self.pipeline.connect("prompt_builder_for_rag_classifier.prompt", "rag_classifier_llm.messages")
-        self.pipeline.connect("rag_classifier_llm.replies", "rag_classifier")
-        self.pipeline.connect("rag_classifier.invalid_replies", "prompt_builder_for_rag_classifier.invalid_replies")
-        self.pipeline.connect("rag_classifier.error_message", "prompt_builder_for_rag_classifier.error_message")
-        self.pipeline.connect("rag_classifier.valid_reply", "rag_classifier_router.valid_reply")
+        self.pipeline.connect("prompt_builder_for_intent_classifier.prompt", "intent_classifier_llm.messages")
+        self.pipeline.connect("intent_classifier_llm.replies", "intent_classifier")
+        self.pipeline.connect("intent_classifier.invalid_replies", "prompt_builder_for_intent_classifier.invalid_replies")
+        self.pipeline.connect("intent_classifier.error_message", "prompt_builder_for_intent_classifier.error_message")
+        self.pipeline.connect("intent_classifier.valid_reply", "intent_classifier_router.valid_reply")
 
-        self.pipeline.connect("rag_classifier_router.go_to_chat", "chat_prompt_builder.query")
-        self.pipeline.connect("rag_classifier_router.go_to_rag", "rag_contextualizer_prompt_builder.query")
+        self.pipeline.connect("intent_classifier_router.go_to_chat", "chat_prompt_builder.query")
+        self.pipeline.connect("intent_classifier_router.go_to_retrieval", "rag_contextualizer_prompt_builder.memories")
         self.pipeline.connect("rag_contextualizer_prompt_builder.prompt", "rag_contextualizer")
         self.pipeline.connect("rag_contextualizer.replies", "list_to_str_adapter")
         self.pipeline.connect("list_to_str_adapter", "embedder.text")
@@ -174,10 +206,30 @@ class RagPipeline:
         self.pipeline.connect("chat_prompt_builder.prompt", "chat_llm.messages")
 
     def run(self, messages: list[ChatMessage]):
-        res = self.pipeline.run({"prompt_builder_for_rag_classifier": {"passage": messages[-1].text}, "rag_classifier_router": {"query": messages[-1].text}, "rag_contextualizer_prompt_builder": {"memories": messages[:-1]}}, include_outputs_from={"rag_contextualizer_prompt_builder", "rag_prompt_builder"})
         import logging
-        logger = logging.getLogger("ray.serve")
-        logger.info(res)
+        from haystack import tracing
+        from haystack.tracing.logging_tracer import LoggingTracer
+
+        logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
+        logging.getLogger("haystack").setLevel(logging.DEBUG)
+
+        tracing.tracer.is_content_tracing_enabled = True # to enable tracing/logging content (inputs/outputs)
+        tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.input": "\x1b[1;31m", "haystack.component.name": "\x1b[1;34m"}))
+        
+        memories = []
+        for message in messages:
+            memory = ""
+            if message.is_from(ChatRole.ASSISTANT):
+                memory += "Assistant: "
+            else:
+                memory += "User: "
+
+            memory += message.text + "\n"
+
+            memories.append(memory)
+
+        res = self.pipeline.run({"prompt_builder_for_intent_classifier": {"passage": messages[-1].text}, "intent_classifier_router": {"memories": memories}})
+
         return res
 
     def _llm_component(

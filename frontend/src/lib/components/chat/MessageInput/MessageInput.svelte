@@ -45,8 +45,12 @@
 </script>
 
 <form onsubmit={handleSend} class="flex w-full items-end gap-2">
-	<ChatTextarea class="h-11 min-h-11 resize-none" bind:value={text} onkeydown={handleOnKeyDown} />
-	<Button type="submit" disabled={sendDisabled} class="h-11 w-11 p-0">
+	<ChatTextarea
+		class="h-11 min-h-11 resize-none focus-visible:ring-offset-0"
+		bind:value={text}
+		onkeydown={handleOnKeyDown}
+	/>
+	<Button type="submit" disabled={sendDisabled} class="h-11 w-11 p-0 transition-all">
 		<MaterialSymbolsSendOutlineRounded class="text-xl" />
 	</Button>
 </form>

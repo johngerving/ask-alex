@@ -6,12 +6,7 @@
 	import { Messages } from '$lib/components/chat/Messages';
 	import { MessageInput } from '$lib/components/chat/MessageInput';
 
-	let messages: Message[] = $state([
-		{
-			content: 'Test',
-			type: MessageType.User
-		}
-	]);
+	let messages = $state<Message[]>([]);
 
 	const addMessage = (message: Message) => {
 		messages.push(message);

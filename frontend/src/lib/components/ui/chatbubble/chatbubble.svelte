@@ -1,6 +1,9 @@
 <script lang="ts">
 	import type { Message } from '$lib/types/message';
 	import { MessageType } from '$lib/types/message';
+	import { marked } from 'marked';
+	import { fly, fade } from 'svelte/transition';
+
 	let { message }: { message: Message } = $props();
 
 	// Display message differently if message is a user message vs. assistant message
@@ -22,7 +25,7 @@
 				</span>
 			</div>
 			<div class="py-2.5 text-sm font-normal text-gray-900">
-				{message.content}
+				{@html marked(message.content)}
 			</div>
 		</div>
 	</div>
