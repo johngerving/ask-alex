@@ -69,17 +69,16 @@ class HaystackQA:
         res = self.pipeline.run(messages)
 
         # Return different reply based on whether chat route or RAG route was followed
-        if "rag_llm" in res:
-            replies = res["rag_llm"]["replies"]
+        if "rag_answer_builder" in res:
+            response = res["rag_answer_builder"]["answers"][0].data
         elif "chat_llm" in res:
             replies = res["chat_llm"]["replies"]
+            if replies:
+                response = replies[0].text
+            else:
+                response = ""
         else:
             raise Exception("No LLM output found")
-
-        if replies:
-            response = replies[0].text
-        else:
-            response = ""
 
         response = response.strip()
         response = re.sub(r'\n\s*\n', '\n\n', response)

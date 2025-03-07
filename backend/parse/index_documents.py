@@ -47,7 +47,7 @@ class DocumentIndexer:
         # Create a Haystack pipeline to index the documents
         self.pipeline = Pipeline()
         # Clean the documents
-        self.pipeline.add_component("cleaner", DocumentCleaner(remove_empty_lines=True, remove_repeated_substrings=True))
+        self.pipeline.add_component("cleaner", DocumentCleaner(remove_empty_lines=True, remove_repeated_substrings=True, remove_regex="^\[\d+\]|\(\d+\)|\b[A-Z][a-z]+ et al\., \d{4}|\(\w+, \d{4}\)|doi:|http[s]?://"))
         # Split them by paragraph
         self.pipeline.add_component("splitter", DocumentSplitter(split_by="word", split_length=200, split_overlap=50))
         # Pipeline step to create document embeddings
