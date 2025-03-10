@@ -10,6 +10,7 @@ from haystack.components.converters import OutputAdapter
 from haystack_integrations.document_stores.pgvector import PgvectorDocumentStore
 from haystack_integrations.components.retrievers.pgvector import PgvectorEmbeddingRetriever
 from haystack import Pipeline
+from grade_document import DocumentRelevancyFilter
 from intent_classifier import IntentClassifier
 
 from typing import Dict
@@ -32,7 +33,7 @@ class RagPipeline:
         )
 
         # Retriever to get embedding vectors based on query
-        retriever = PgvectorEmbeddingRetriever(document_store=document_store, top_k=8)
+        retriever = PgvectorEmbeddingRetriever(document_store=document_store, top_k=16)
 
         classes = {
             "(a)": "use for conversational messages that don't require outside information or previous context to answer.",
@@ -138,10 +139,10 @@ class RagPipeline:
             ChatMessage.from_user(
                 """
                 Please provide an answer based solely on the provided sources. 
-                When referencing information from a source, you must create an inline citation using the corresponding source number. Your citation is presented as [i], where i corresponds to the number of the provided source.
+                When referencing information from a source, you must create an inline citation using the corresponding source number. Use the <citation> tag to surround the source number.
                 Every answer should include at least one source citation. Only cite a source when you are explicitly referencing it. If none of the sources are helpful, you should indicate that.
                 
-                For example:
+                <example>
                     Source 1:
                     The sky is red in the evening and blue in the morning.
                     
@@ -150,8 +151,8 @@ class RagPipeline:
 
                     Query: When is water wet?
 
-                    Answer: Water will be wet when the sky is red [2], which occurs in the evening [1].
-                End of example.
+                    Answer: Water will be wet when the sky is red <citation>2</citation>, which occurs in the evening <citation>1</citation>.
+                </example>
 
                 Now it's your turn. Below are several numbered sources of information.
                 {% for document in documents %}
@@ -189,11 +190,12 @@ class RagPipeline:
         self.pipeline.add_component("intent_classifier_router", intent_classifier_router) # Route query based on chat or RAG
 
         ##### RAG #####
-        self.pipeline.add_component("rag_contextualizer_prompt_builder", rag_contextualizer_prompt_builder)
-        self.pipeline.add_component("rag_contextualizer", self._llm_component())
-        self.pipeline.add_component("list_to_str_adapter", OutputAdapter(template="{{ replies[0].text }}", output_type=str))
+        # self.pipeline.add_component("rag_contextualizer_prompt_builder", rag_contextualizer_prompt_builder)
+        # self.pipeline.add_component("rag_contextualizer", self._llm_component())
+        self.pipeline.add_component("list_to_str_adapter", OutputAdapter(template="{{ memories[-1] }}", output_type=str))
         self.pipeline.add_component("embedder", SentenceTransformersTextEmbedder()) # Get query vector embedding
         self.pipeline.add_component("retriever", retriever) # Retrieve similar documents
+        self.pipeline.add_component("document_relevancy_filter", DocumentRelevancyFilter()) # Filter out irrelevant documents
         self.pipeline.add_component("rag_prompt_builder", rag_prompt_builder) # Build prompt using query and retrieved documents
         self.pipeline.add_component("rag_llm", rag_llm) # Pass prompt to LLM
         self.pipeline.add_component("rag_answer_builder", AnswerBuilder(reference_pattern='\\[(?:(\\d+),?\\s*)+\\]'))
@@ -209,15 +211,19 @@ class RagPipeline:
         self.pipeline.connect("intent_classifier.valid_reply", "intent_classifier_router.valid_reply")
 
         self.pipeline.connect("intent_classifier_router.go_to_chat", "chat_prompt_builder.query")
-        self.pipeline.connect("intent_classifier_router.go_to_retrieval", "rag_contextualizer_prompt_builder.memories")
-        self.pipeline.connect("rag_contextualizer_prompt_builder.prompt", "rag_contextualizer")
-        self.pipeline.connect("rag_contextualizer.replies", "list_to_str_adapter")
+        # self.pipeline.connect("intent_classifier_router.go_to_retrieval", "rag_contextualizer_prompt_builder.memories")
+        # self.pipeline.connect("rag_contextualizer_prompt_builder.prompt", "rag_contextualizer")
+        # self.pipeline.connect("rag_contextualizer.replies", "list_to_str_adapter")
+        self.pipeline.connect("intent_classifier_router.go_to_retrieval", "list_to_str_adapter")        
+
         self.pipeline.connect("list_to_str_adapter", "embedder.text")
         self.pipeline.connect("list_to_str_adapter", "rag_prompt_builder.query")
         self.pipeline.connect("list_to_str_adapter", "rag_answer_builder.query")
+        self.pipeline.connect("list_to_str_adapter", "document_relevancy_filter.query")
 
         self.pipeline.connect("embedder.embedding", "retriever.query_embedding")
-        self.pipeline.connect("retriever", "rag_prompt_builder.documents")
+        self.pipeline.connect("retriever", "document_relevancy_filter.documents")
+        self.pipeline.connect("document_relevancy_filter", "rag_prompt_builder.documents")
         self.pipeline.connect("rag_prompt_builder.prompt", "rag_llm.messages")
         self.pipeline.connect("rag_llm.replies", "rag_answer_builder.replies")
         self.pipeline.connect("chat_prompt_builder.prompt", "chat_llm.messages")
@@ -245,10 +251,15 @@ class RagPipeline:
 
             memories.append(memory)
 
-        res = self.pipeline.run({"prompt_builder_for_intent_classifier": {"passage": messages[-1].text}, "intent_classifier_router": {"memories": memories}}, include_outputs_from={"retriever"})
+        res = self.pipeline.run({"prompt_builder_for_intent_classifier": {"passage": messages[-1].text}, "intent_classifier_router": {"memories": memories}}, include_outputs_from={"retriever", "document_relevancy_filter"})
         logger = logging.getLogger('ray.serve')
-        for doc in res["retriever"]["documents"]:
+
+        for doc in res["document_relevancy_filter"]["documents"]:
             logger.info(doc.content)
+
+        logger.info(f"INITIAL DOCUMENTS: {len(res['retriever']['documents'])}")
+        logger.info(f"FILTERED DOCUMENTS: {len(res['document_relevancy_filter']['documents'])}")
+            
 
         return res
 

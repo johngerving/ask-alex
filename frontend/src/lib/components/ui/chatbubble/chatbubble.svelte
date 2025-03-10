@@ -24,9 +24,15 @@
 					{/if}
 				</span>
 			</div>
-			<div class="py-2.5 text-sm font-normal text-gray-900">
+			<div class="whitespace-break-spaces py-2.5 text-sm font-normal text-gray-900">
 				{@html marked(message.content)}
 			</div>
 		</div>
 	</div>
 </div>
+
+<style>
+	pre :global(code) {
+		white-space: normal;
+	}
+</style>
