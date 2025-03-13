@@ -66,19 +66,7 @@ class HaystackQA:
                 messages.append(ChatMessage.from_user(el.content))
             else:
                 raise HTTPException(status_code=400, detail=f"Message type must be either 'assistant' or 'user'. Got {el.type}")
-        res = self.pipeline.run(messages)
-
-        # Return different reply based on whether chat route or RAG route was followed
-        if "rag_answer_builder" in res:
-            response = res["rag_answer_builder"]["answers"][0].data
-        elif "chat_llm" in res:
-            replies = res["chat_llm"]["replies"]
-            if replies:
-                response = replies[0].text
-            else:
-                response = ""
-        else:
-            raise Exception("No LLM output found")
+        response = self.pipeline.run(messages)
 
         response = response.strip()
         response = re.sub(r'\n\s*\n', '\n\n', response)

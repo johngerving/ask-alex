@@ -258,8 +258,19 @@ class RagPipeline:
         logger.info(f"INITIAL DOCUMENTS: {len(res['retriever']['documents'])}")
         logger.info(f"FILTERED DOCUMENTS: {len(res['document_relevancy_filter']['documents'])}")
             
+        # Return different reply based on whether chat route or RAG route was followed
+        if "rag_answer_builder" in res:
+            response = res["rag_answer_builder"]["answers"][0].data
+        elif "chat_llm" in res:
+            replies = res["chat_llm"]["replies"]
+            if replies:
+                response = replies[0].text
+            else:
+                response = ""
+        else:
+            raise Exception("No LLM output found")
 
-        return res
+        return response 
 
     def _llm_component(
         self,
