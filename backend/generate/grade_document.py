@@ -1,3 +1,5 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from haystack import component
 from haystack.utils import Secret
 from haystack.components.generators.chat import OpenAIChatGenerator
@@ -130,11 +132,16 @@ class DocumentRelevancyFilter:
 
     @component.output_types(documents=List[Document])
     def run(self, documents: List[Document], query: str):
-        filtered_documents = list(filter(lambda docs: self._is_relevant(docs, query), documents))
+        filtered_documents = self._pfilter(lambda docs: self._is_relevant(docs, query), documents, len(documents))
 
         return {
             "documents": filtered_documents
         }
+
+    def _pfilter(self, filter_func: int, arr: int, max_workers: int):
+        with ThreadPoolExecutor(max_workers) as e:
+            booleans = e.map(filter_func, arr)
+            return [x for x, b in zip(arr, booleans) if b]
     
     def _is_relevant(self, document: Document, query: str) -> bool:
         '''

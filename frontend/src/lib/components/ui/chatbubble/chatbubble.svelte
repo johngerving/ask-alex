@@ -6,6 +6,9 @@
 
 	let { message }: { message: Message } = $props();
 
+	let content =
+		'`asdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdfasdfjaskldf;asjdkfl;asdf`';
+
 	// Display message differently if message is a user message vs. assistant message
 	let isUser: boolean = $derived(message.type === MessageType.User);
 </script>
@@ -24,15 +27,26 @@
 					{/if}
 				</span>
 			</div>
-			<div class="whitespace-break-spaces py-2.5 text-sm font-normal text-gray-900">
-				{@html marked(message.content)}
+			<div class=".chat-content whitespace-break-spaces py-2.5 text-sm font-normal text-gray-900">
+				{@html marked(content)}
 			</div>
 		</div>
 	</div>
 </div>
 
 <style>
-	pre :global(code) {
+	.chat-content {
 		white-space: normal;
+		overflow-x: scroll;
+	}
+	.chat-content :global(pre) {
+		white-space: normal;
+		background-color: blue;
+		overflow-x: scroll;
+	}
+
+	.chat-content :global(code) {
+		white-space: normal;
+		overflow-x: scroll;
 	}
 </style>

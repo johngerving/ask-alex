@@ -190,9 +190,9 @@ class RagPipeline:
         self.pipeline.add_component("intent_classifier_router", intent_classifier_router) # Route query based on chat or RAG
 
         ##### RAG #####
-        # self.pipeline.add_component("rag_contextualizer_prompt_builder", rag_contextualizer_prompt_builder)
-        # self.pipeline.add_component("rag_contextualizer", self._llm_component())
-        self.pipeline.add_component("list_to_str_adapter", OutputAdapter(template="{{ memories[-1] }}", output_type=str))
+        self.pipeline.add_component("rag_contextualizer_prompt_builder", rag_contextualizer_prompt_builder)
+        self.pipeline.add_component("rag_contextualizer", self._llm_component())
+        self.pipeline.add_component("list_to_str_adapter", OutputAdapter(template="{{ replies[0].text }}", output_type=str))
         self.pipeline.add_component("embedder", SentenceTransformersTextEmbedder()) # Get query vector embedding
         self.pipeline.add_component("retriever", retriever) # Retrieve similar documents
         self.pipeline.add_component("document_relevancy_filter", DocumentRelevancyFilter()) # Filter out irrelevant documents
@@ -211,11 +211,9 @@ class RagPipeline:
         self.pipeline.connect("intent_classifier.valid_reply", "intent_classifier_router.valid_reply")
 
         self.pipeline.connect("intent_classifier_router.go_to_chat", "chat_prompt_builder.query")
-        # self.pipeline.connect("intent_classifier_router.go_to_retrieval", "rag_contextualizer_prompt_builder.memories")
-        # self.pipeline.connect("rag_contextualizer_prompt_builder.prompt", "rag_contextualizer")
-        # self.pipeline.connect("rag_contextualizer.replies", "list_to_str_adapter")
-        self.pipeline.connect("intent_classifier_router.go_to_retrieval", "list_to_str_adapter")        
-
+        self.pipeline.connect("intent_classifier_router.go_to_retrieval", "rag_contextualizer_prompt_builder.memories")
+        self.pipeline.connect("rag_contextualizer_prompt_builder.prompt", "rag_contextualizer")
+        self.pipeline.connect("rag_contextualizer.replies", "list_to_str_adapter")
         self.pipeline.connect("list_to_str_adapter", "embedder.text")
         self.pipeline.connect("list_to_str_adapter", "rag_prompt_builder.query")
         self.pipeline.connect("list_to_str_adapter", "rag_answer_builder.query")
