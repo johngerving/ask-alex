@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Message } from '$lib/types/message';
 	import { MessageType } from '$lib/types/message';
+	import { cn } from '$lib/utils';
 	import { marked } from 'marked';
 	import { fly, fade } from 'svelte/transition';
 
@@ -10,7 +11,16 @@
 	let isUser: boolean = $derived(message.type === MessageType.User);
 </script>
 
-<div>
+<div
+	class={cn(
+		'flex w-max max-w-[75%] flex-col gap-2 rounded-lg px-3 py-2 text-sm',
+		isUser ? 'bg-muted ml-auto' : 'bg-muted'
+	)}
+>
+	{message.content}
+</div>
+
+<!-- <div>
 	<div class={`chat-bubble flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
 		<div
 			class={`leading-1.5 flex w-full max-w-xl flex-col rounded-b-xl border-gray-200 bg-gray-100 p-4 ${isUser ? 'rounded-l-xl' : 'rounded-r-xl'}`}
@@ -29,4 +39,4 @@
 			</div>
 		</div>
 	</div>
-</div>
+</div> -->
