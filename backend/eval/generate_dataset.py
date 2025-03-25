@@ -36,8 +36,10 @@ if aws_endpoint_url is None:
 
 documents: List[Document] = []
 
+# Get tokenizer for model
 tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-2-1124-13B-Instruct")
 
+# Randomly select documents from document store
 with psycopg.connect(conn_str) as conn:
     with conn.cursor() as cur:
         cur.execute("SELECT document FROM documents ORDER BY random() LIMIT 1000")
@@ -46,8 +48,10 @@ with psycopg.connect(conn_str) as conn:
         for result in results:
             obj = json.loads(result[0])
 
+            # Get document
             document = Document.from_dict(obj)
 
+            # Use tokenizer to get the length of the document. Don't use it if it's too long
             num_tokens = len(tokenizer.tokenize(document.content))
 
             if num_tokens <= MAX_TOKEN_LENGTH:
@@ -56,29 +60,32 @@ with psycopg.connect(conn_str) as conn:
             if len(documents) >= NUM_QUESTIONS:
                 break
 
+### QUESTION GENERATION ###
+
+# Generate question from document
 question_prompt_builder = ChatPromptBuilder(
     template=[
         ChatMessage.from_user(
             """
-        Your task is to write a factoid question and an answer given a context.
-        Your factoid question should be answerable with a specific, concise piece of factual information from the context.
-        Your factoid question should be formulated in the same style as questions users could ask in a search engine.
-        This means that your factoid question MUST NOT mention something like "according to the passage" or "context".
-        DO NOT answer the question. Only output the question on its own.
+Your task is to write a factoid question and an answer given a context.
+Your factoid question should be answerable with a specific, concise piece of factual information from the context.
+Your factoid question should be formulated in the same style as questions users could ask in a search engine.
+This means that your factoid question MUST NOT mention something like "according to the passage" or "context".
+DO NOT answer the question. Only output the question on its own.
 
-        Provide your answer as follows:
+Provide your answer as follows:
 
-        <example>
-        Output:
-        Factoid question: (your factoid question)
-        </example>
+<example>
+Output:
+Factoid question: (your factoid question)
+</example>
 
-        Now here is the context.
+Now here is the context.
 
-        Context: {{ document.content }} 
+Context: {{ document.content }} 
 
-        Output:
-        Factoid question:"""
+Output:
+Factoid question:"""
         )
     ]
 )
@@ -97,27 +104,26 @@ question_pipeline.add_component("generator", question_generator)
 
 question_pipeline.connect("prompt_builder", "generator")
 
+### ANSWER GENERATION ###
 
 answer_prompt_builder = ChatPromptBuilder(
     template=[
         ChatMessage.from_system(
-            """
-        You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Respond to the input as a friendly AI assistant, generating human-like text, and follow the instructions in the input if applicable. Keep the response concise and engaging, using Markdown when appropriate. Use a conversational tone and provide helpful and informative responses, utilizing only the context provided to formulate answers.
-        """
+            """You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Respond to the input as a friendly AI assistant, generating human-like text, and follow the instructions in the input if applicable. Keep the response concise and engaging, using Markdown when appropriate. Use a conversational tone and provide helpful and informative responses, utilizing only the context provided to formulate answers."""
         ),
         ChatMessage.from_user(
             """
-        Please provide an answer based solely on the provided source, in no more than 50 words. 
-               
-        Below is a document: 
+Please provide an answer based solely on the provided source, in no more than 50 words. 
+        
+Below is a document: 
 
-        {{ document.content }} 
+{{ document.content }} 
 
-        Answer the following query:
+Answer the following query:
 
-        Query: {{query}}
-        Answer:
-        """
+Query: {{query}}
+Answer:
+"""
         ),
     ]
 )
@@ -136,12 +142,16 @@ answer_pipeline.add_component("generator", answer_generator)
 
 answer_pipeline.connect("prompt_builder", "generator")
 
+### QUESTION EVALUATION ###
 
+
+# Model for an evaluation of a question
 class Evaluation(BaseModel):
     explanation: str
     rating: int
 
 
+# Get the schema of the Evaluation model
 json_schema = json.dumps(Evaluation.model_json_schema(), indent=4)
 
 evaluation_prompt_builder = ChatPromptBuilder(
@@ -155,6 +165,7 @@ evaluation_generator = OpenAIChatGenerator(
     generation_kwargs={"max_tokens": 512},
 )
 
+# Output validator to make sure LLM formats everything correctly
 output_validator = OutputValidator(pydantic_model=Evaluation)
 
 evaluation_pipeline = Pipeline(max_runs_per_component=5)
@@ -175,9 +186,13 @@ evaluation_pipeline.connect(
 
 
 def evaluate_question(question: Dict[str, Any]):
+    """
+    Takes a question and evaluates it based off of its groundedness, relevance, and standalone scores.
+    """
     new_question = question.copy()
 
     try:
+        # Evaluate groundedness from context and question
         groundedness = json.loads(
             evaluation_pipeline.run(
                 {
@@ -195,6 +210,7 @@ def evaluate_question(question: Dict[str, Any]):
             )["output_validator"]["valid_replies"][0].text
         )
 
+        # Evaluate relevance of question to Humboldt topics
         relevance = json.loads(
             evaluation_pipeline.run(
                 {
@@ -211,6 +227,7 @@ def evaluate_question(question: Dict[str, Any]):
             )["output_validator"]["valid_replies"][0].text
         )
 
+        # Evaluate how well the question works as a standalone question
         standalone = json.loads(
             evaluation_pipeline.run(
                 {
@@ -233,6 +250,7 @@ def evaluate_question(question: Dict[str, Any]):
             "standalone": standalone,
         }
 
+        # Format score and explanation for each criterion
         for criterion, evaluation in evaluations.items():
             score, eval = (evaluation["rating"], evaluation["explanation"])
 
@@ -249,6 +267,7 @@ def evaluate_question(question: Dict[str, Any]):
 
 
 with ThreadPoolExecutor(max_workers=16) as e:
+    # Generate questions from documents
     questions = list(
         e.map(
             lambda doc: question_pipeline.run({"prompt_builder": {"document": doc}})[
@@ -258,18 +277,22 @@ with ThreadPoolExecutor(max_workers=16) as e:
         )
     )
 
+    # Filter out responses that aren't questions
     question_regex = re.compile(r"^.*\?", re.I)
     questions = [
         question_regex.search(q)[0] if question_regex.search(q) is not None else ""
         for q in questions
     ]
 
+    # Format questions and their corresponding documents together
     outputs = [
         {"question": q, "context": c.content} for q, c in zip(questions, documents)
     ]
 
+    # Evaluate each question
     outputs = list(e.map(evaluate_question, outputs))
 
+    # Filter out questions with low scores
     outputs = [
         output
         for output in outputs
@@ -278,14 +301,7 @@ with ThreadPoolExecutor(max_workers=16) as e:
         and output["standalone_score"] >= 3
     ]
 
-    # generated_questions = pd.DataFrame.from_dict(outputs)
-    # generated_questions.dropna(inplace=True)
-    # generated_questions = generated_questions.loc[
-    #     (generated_questions["groundedness_score"] >= 3)
-    #     & (generated_questions["relevance_score"] >= 3)
-    #     & (generated_questions["standalone_score"] >= 3)
-    # ]
-
+    # Generate answers for relevant questions
     answers = list(
         e.map(
             lambda doc, q: answer_pipeline.run(
@@ -296,6 +312,7 @@ with ThreadPoolExecutor(max_workers=16) as e:
         )
     )
 
+    # DataFrame for questions and answers
     questions_answers = pd.DataFrame.from_dict(outputs)
     questions_answers["answers"] = answers
     questions_answers.dropna(inplace=True)
