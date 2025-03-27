@@ -24,7 +24,7 @@ from prompts import (
 load_dotenv()
 
 MAX_TOKEN_LENGTH = 3500 - 512
-NUM_QUESTIONS = 100
+NUM_QUESTIONS = 6000
 
 conn_str = os.getenv("PG_CONN_STR")
 aws_endpoint_url = os.getenv("AWS_ENDPOINT_URL")
@@ -42,7 +42,10 @@ tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-2-1124-13B-Instruct")
 # Randomly select documents from document store
 with psycopg.connect(conn_str) as conn:
     with conn.cursor() as cur:
-        cur.execute("SELECT document FROM documents ORDER BY random() LIMIT 1000")
+        cur.execute(
+            "SELECT document FROM documents ORDER BY random() LIMIT %s",
+            (NUM_QUESTIONS,),
+        )
         results = cur.fetchall()
 
         for result in results:
@@ -292,11 +295,15 @@ with ThreadPoolExecutor(max_workers=16) as e:
     # Evaluate each question
     outputs = list(e.map(evaluate_question, outputs))
 
+    print("OUTPUTS:", outputs)
     # Filter out questions with low scores
     outputs = [
         output
         for output in outputs
-        if output["groundedness_score"] >= 3
+        if "groundedness_score" in output
+        and "relevance_score" in output
+        and "standalone_score" in output
+        and output["groundedness_score"] >= 3
         and output["relevance_score"] >= 3
         and output["standalone_score"] >= 3
     ]
