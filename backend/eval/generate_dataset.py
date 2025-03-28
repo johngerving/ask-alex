@@ -303,9 +303,9 @@ with ThreadPoolExecutor(max_workers=16) as e:
         if "groundedness_score" in output
         and "relevance_score" in output
         and "standalone_score" in output
-        and output["groundedness_score"] >= 3
-        and output["relevance_score"] >= 3
-        and output["standalone_score"] >= 3
+        and output["groundedness_score"] >= 4
+        and output["relevance_score"] >= 4
+        and output["standalone_score"] >= 4
     ]
 
     # Generate answers for relevant questions
