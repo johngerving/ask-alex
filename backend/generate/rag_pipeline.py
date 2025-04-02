@@ -2,6 +2,7 @@ import os
 
 from haystack.utils import Secret
 from haystack.components.generators.chat import OpenAIChatGenerator
+from haystack_integrations.components.generators.google_ai import GoogleAIGeminiChatGenerator
 from haystack.dataclasses import ChatMessage, ChatRole
 from haystack.components.builders import ChatPromptBuilder, AnswerBuilder
 from haystack.components.embedders import SentenceTransformersTextEmbedder
@@ -306,9 +307,9 @@ class RagPipeline:
             },
             include_outputs_from={"retriever"},
         )
-        logger = logging.getLogger("ray.serve")
-        for doc in res["retriever"]["documents"]:
-            logger.info(doc.content)
+        # logger = logging.getLogger("ray.serve")
+        # for doc in res["retriever"]["documents"]:
+        #     logger.info(doc.content)
 
         return res
 
@@ -318,7 +319,7 @@ class RagPipeline:
         model: str = "allenai/OLMo-2-1124-13B-Instruct",
         api_base_url: str = "http://localhost:8000/v1",
         generation_kwargs: Dict = {"max_tokens": 512},
-    ) -> OpenAIChatGenerator:
+    ) -> GoogleAIGeminiChatGenerator:
         """
         Returns an OpenAIChatGenerator object with an endpoint to our self-hosted LLM.
 
@@ -328,10 +329,13 @@ class RagPipeline:
             api_base_url: The base URL of the LLM endpoint.
             generation_kwargs: Additional keyword arguments to pass for LLM generation.
         """
-        llm = OpenAIChatGenerator(
-            api_key=api_key,  # Placeholder api_key is needed for compatibility for OpenAI API
-            model=model,
-            api_base_url=api_base_url,
-            generation_kwargs=generation_kwargs,
+        # llm = OpenAIChatGenerator(
+        #     api_key=api_key,  # Placeholder api_key is needed for compatibility for OpenAI API
+        #     model=model,
+        #     api_base_url=api_base_url,
+        #     generation_kwargs=generation_kwargs,
+        # )
+        llm = GoogleAIGeminiChatGenerator(
+            model="gemini-2.0-flash",
         )
         return llm

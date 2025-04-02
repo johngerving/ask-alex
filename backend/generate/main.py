@@ -19,10 +19,10 @@ app = FastAPI()
 import logging
 logger = logging.getLogger("ray.serve")
 
-logger.info(os.getenv("FRONTEND_URL"))
+logger.info(f"Frontend URL: {os.getenv('FRONTEND_URL')}")
 
 allow_origins = [
-    os.getenv("FRONTEND_URL")
+    os.getenv('FRONTEND_URL')
 ]
 
 if None in allow_origins:
