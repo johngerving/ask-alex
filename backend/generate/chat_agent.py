@@ -10,14 +10,15 @@ from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.storage.agent.postgres import PostgresAgentStorage
 from agno.workflow import Workflow
+from agno.tools import tool
 from pydantic import BaseModel, Field
 
 
-class Action(BaseModel):
-    route: Literal["chat", "retrieval"] = Field(
-        ...,
-        description="The action to take. Choose chat if the user message does not require additional information to answer. Choose retrieval if you need information that cannot be found within the available context, or if the user specifically requests it.",
-    )
+@tool(
+    stop_after_tool_call=True,
+)
+def retrieval_route():
+    """Use this function to initiate the retrieval workflow if you need more information to answer a query."""
 
 
 class ChatWorkflow(Workflow):
@@ -29,22 +30,16 @@ class ChatWorkflow(Workflow):
             auto_upgrade_schema=True,
         )
 
-        router = self.get_router_agent(storage=storage)
+        chat_agent = self.get_chat_agent(storage=storage)
 
-        response = router.run(message)
-        if not isinstance(response.content, Action):
-            raise Exception(f"Invalid Action response: {response.content}")
-        action: Action = response.content
+        response = chat_agent.run(message)
 
-        if action.route == "chat":
-            messages = router.memory.get_messages_from_last_n_runs(3)
-            chat_agent = self.get_chat_agent(messages=messages)
-            response = chat_agent.run(message)
-            return response
+        logger = logging.getLogger("ray.serve")
+        logger.info(response)
 
         return response
 
-    def get_router_agent(self, storage: PostgresAgentStorage) -> Agent:
+    def get_chat_agent(self, storage: PostgresAgentStorage) -> Agent:
 
         session_id: Optional[str] = None
 
@@ -53,35 +48,24 @@ class ChatWorkflow(Workflow):
             session_id = existing_sessions[0]
 
         agent = Agent(
-            model=Gemini(id="gemini-2.0-flash-lite"),
+            model=Gemini(id="gemini-2.0-flash"),
             storage=storage,
             session_id=session_id,
             user_id=self.user_id,
             instructions=dedent(
                 """\
-                You are a router agent designed to decide which action to take based on the current user message and the chat history.
-                """
-            ),
-            response_model=Action,
-            reasoning=True,
-            show_tool_calls=True,
-            add_history_to_messages=True,
-            debug_mode=True,
-            monitoring=True,
-        )
-
-        return agent
-
-    def get_chat_agent(self, messages: List[Message]) -> Agent:
-        agent = Agent(
-            model=Gemini(id="gemini-2.0-flash"),
-            instructions=dedent(
-                """\
                 You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Respond to the input as a friendly AI assistant, generating human-like text, and follow the instructions in the input if applicable. Keep the response concise and engaging, using Markdown when appropriate. Use a conversational tone and provide helpful and informative responses.
+                Use the retrieval_route tool to route the query to a retrieval step if you do not have enough information to answer the question.
+                Do not ask permission to use a tool.
+
+                <examples>
+                    In response to the message "Who are you?", you should respond normally.
+
+                    In response to the message "What are the symptoms of COVID-19 according to the latest research, you should call the retrieval_route tool.
+                </examples>
                 """
             ),
-            memory=AgentMemory(messages=messages),
-            markdown=True,
+            tools=[retrieval_route],
             show_tool_calls=True,
             add_history_to_messages=True,
             debug_mode=True,
