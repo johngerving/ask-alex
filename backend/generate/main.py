@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel
 
-from chat_agent import get_chat_agent
+from chat_agent import ChatWorkflow
+from agno.storage.postgres import PostgresStorage
 
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -56,7 +57,6 @@ class HaystackQA:
     @app.post("/")
     async def run(self, body: RAGBody) -> RAGResponse:
         from haystack.dataclasses import ChatMessage
-        from chat_agent import get_chat_agent
 
         # Run the pipeline with the user's query
         messages = []
@@ -74,9 +74,16 @@ class HaystackQA:
                     detail=f"Message type must be either 'assistant' or 'user'. Got {el.type}",
                 )
 
-        agent = get_chat_agent("John")
+        chat_agent = ChatWorkflow(
+            user_id="John",
+            storage=PostgresStorage(
+                table_name="chat_workflows", db_url=os.getenv("PG_CONN_STR")
+            ),
+        )
 
-        response = agent.run(body.messages[-1].content).content
+        response = chat_agent.run(message=body.messages[-1].content).content
+
+        logger.info(response)
 
         response = response.strip()
         response = re.sub(r"\n\s*\n", "\n\n", response)
