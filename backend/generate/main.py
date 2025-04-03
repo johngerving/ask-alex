@@ -1,15 +1,15 @@
 import os
 import re
 
-from haystack.dataclasses import ChatMessage
-from rag_pipeline import RagPipeline
-
 from ray import serve
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+
 from pydantic import BaseModel
+
+from chat_agent import get_chat_agent
 
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -17,13 +17,12 @@ from pydantic import BaseModel
 app = FastAPI()
 
 import logging
+
 logger = logging.getLogger("ray.serve")
 
 logger.info(f"Frontend URL: {os.getenv('FRONTEND_URL')}")
 
-allow_origins = [
-    os.getenv('FRONTEND_URL')
-]
+allow_origins = [os.getenv("FRONTEND_URL")]
 
 if None in allow_origins:
     raise Exception("FRONTEND_URL environment variable is required")
@@ -34,25 +33,30 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
 )
 
+
 class RequestMessage(BaseModel):
     content: str
     type: str
 
+
 class RAGBody(BaseModel):
     messages: list[RequestMessage]
 
+
 class RAGResponse(BaseModel):
     response: str = ""
+
 
 @serve.deployment
 @serve.ingress(app)
 class HaystackQA:
     def __init__(self):
-        self.pipeline = RagPipeline()
+        pass
 
     @app.post("/")
     async def run(self, body: RAGBody) -> RAGResponse:
         from haystack.dataclasses import ChatMessage
+        from chat_agent import get_chat_agent
 
         # Run the pipeline with the user's query
         messages = []
@@ -65,25 +69,20 @@ class HaystackQA:
             elif el.type == "user":
                 messages.append(ChatMessage.from_user(el.content))
             else:
-                raise HTTPException(status_code=400, detail=f"Message type must be either 'assistant' or 'user'. Got {el.type}")
-        res = self.pipeline.run(messages)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Message type must be either 'assistant' or 'user'. Got {el.type}",
+                )
 
-        # Return different reply based on whether chat route or RAG route was followed
-        if "rag_answer_builder" in res:
-            response = res["rag_answer_builder"]["answers"][0].data
-        elif "chat_llm" in res:
-            replies = res["chat_llm"]["replies"]
-            if replies:
-                response = replies[0].text
-            else:
-                response = ""
-        else:
-            raise Exception("No LLM output found")
+        agent = get_chat_agent("John")
+
+        response = agent.run(body.messages[-1].content).content
 
         response = response.strip()
-        response = re.sub(r'\n\s*\n', '\n\n', response)
+        response = re.sub(r"\n\s*\n", "\n\n", response)
 
         return RAGResponse(response=response)
+
 
 haystack_deployment = HaystackQA.bind()
 # query = "What are the impacts of ammonium phosphate-based fire retardants on cyanobacteria growth?"
