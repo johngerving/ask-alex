@@ -3,8 +3,6 @@ import numpy as np
 import os
 import json
 
-from haystack_integrations.document_stores.pgvector import PgvectorDocumentStore
-
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import (
     AcceleratorDevice,
@@ -13,15 +11,12 @@ from docling.datamodel.pipeline_options import (
 )
 from docling.datamodel.base_models import InputFormat
 
+from agno.vectordb.pgvector import PgVector, SearchType
+from agno.embedder.google import GeminiEmbedder
+from document_cleaner import DocumentCleaner
 
-from haystack import Pipeline, Document
-from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
-from haystack.components.embedders import SentenceTransformersDocumentEmbedder
-from haystack.components.writers import DocumentWriter
 import psycopg
 import ray.data
-from haystack.utils import Secret
-from haystack.utils import ComponentDevice, Device
 
 import logging
 
@@ -30,57 +25,27 @@ import ray
 
 class DocumentIndexer:
     def __init__(self):
-        from haystack_integrations.document_stores.pgvector import PgvectorDocumentStore
-
-        from haystack import Pipeline
-        from haystack.components.embedders import SentenceTransformersDocumentEmbedder
-        from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
-        from haystack.components.writers import DocumentWriter
-        from haystack.utils import Secret
-
         import logging
+
+        from agno.vectordb.pgvector import PgVector, SearchType
+        from agno.embedder.google import GeminiEmbedder
+        from document_cleaner import DocumentCleaner
 
         self.logger = logging.getLogger("ray.data")
 
         # Define pgvector document store to store the documents and their embeddings in
-        document_store = PgvectorDocumentStore(
-            connection_string=Secret.from_token(os.getenv("PG_CONN_STR")),
-            table_name="haystack_docs",
-            embedding_dimension=768,
-            vector_function="cosine_similarity",
-            recreate_table=True,
-            search_strategy="hnsw",
+        self.vector_db = PgVector(
+            table_name="agno_docs",
+            schema="public",
+            db_url=os.getenv("PG_CONN_STR"),
+            search_type=SearchType.vector,
+            embedder=GeminiEmbedder(),
         )
-
-        # Create a Haystack pipeline to index the documents
-        self.pipeline = Pipeline()
-        # Clean the documents
-        self.pipeline.add_component(
-            "cleaner",
-            DocumentCleaner(
-                remove_empty_lines=True,
-                remove_repeated_substrings=True,
-                remove_regex="^\[\d+\]|\(\d+\)|\b[A-Z][a-z]+ et al\., \d{4}|\(\w+, \d{4}\)|doi:|http[s]?://",
-            ),
+        self.document_cleaner = DocumentCleaner(
+            remove_empty_lines=True,
+            remove_repeated_substrings=True,
+            remove_regex="^\[\d+\]|\(\d+\)|\b[A-Z][a-z]+ et al\., \d{4}|\(\w+, \d{4}\)|doi:|http[s]?://",
         )
-        # Split them by paragraph
-        self.pipeline.add_component(
-            "splitter",
-            DocumentSplitter(split_by="word", split_length=200, split_overlap=50),
-        )
-        # Pipeline step to create document embeddings
-        self.pipeline.add_component(
-            "embedder",
-            SentenceTransformersDocumentEmbedder(
-                device=ComponentDevice.from_single(Device.gpu())
-            ),
-        )
-        # Pipeline step to write the documents to our PgvectorDocumentStore
-        self.pipeline.add_component("writer", DocumentWriter(document_store))
-
-        self.pipeline.connect("cleaner.documents", "splitter.documents")
-        self.pipeline.connect("splitter.documents", "embedder.documents")
-        self.pipeline.connect("embedder", "writer")
 
     def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         """
@@ -88,18 +53,19 @@ class DocumentIndexer:
 
         Args:
             batch: A dictionary with a column for links to PDFs.
-            indexing_pipeline: A Haystack Pipeline object to run the batch through.
         """
-        from haystack import Document
+        from agno.document import Document
         import json
 
-        # Get the text stored in each document, convert it to a dictionary, and convert each of those into a Haystack Document
+        # Get the text stored in each document, convert it to a dictionary, and convert each of those into an Agno Document
         documents = [Document.from_dict(json.loads(doc)) for doc in batch["document"]]
 
         self.logger.info(f"Processing batch of size {len(documents)}")
-        # Run the pipeline on the batch received
-        res = self.pipeline.run(
-            {"cleaner": {"documents": documents}}, include_outputs_from={"splitter"}
+        # Clean the documents
+        documents = self.document_cleaner.clean(documents)
+        self.vector_db.insert(
+            documents=documents,
+            batch_size=len(batch),
         )
 
         return batch
@@ -117,6 +83,10 @@ def index_documents():
     conn_str = os.getenv("PG_CONN_STR")
     if conn_str is None:
         raise Exception("Missing environment variable PG_CONN_STR")
+
+    # Drop the documents table if it exists
+    with psycopg.connect(conn_str) as conn:
+        conn.cursor().execute("DROP TABLE IF EXISTS agno_docs")
 
     # Read full documents from Postgres database
     ds = ray.data.read_sql("SELECT * FROM documents", lambda: psycopg.connect(conn_str))
