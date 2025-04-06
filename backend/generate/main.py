@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from chat_agent import ChatWorkflow
 from agno.storage.postgres import PostgresStorage
+from agno.run.response import RunResponse
 
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -56,7 +57,7 @@ class HaystackQA:
 
     @app.post("/")
     async def run(self, body: RAGBody) -> RAGResponse:
-        from haystack.dataclasses import ChatMessage
+        from agno.models.message import Message
 
         # Run the pipeline with the user's query
         messages = []
@@ -65,9 +66,19 @@ class HaystackQA:
             raise HTTPException(status_code=400, detail="Empty field 'messages'")
         for el in body.messages:
             if el.type == "assistant":
-                messages.append(ChatMessage.from_assistant(el.content))
+                messages.append(
+                    Message(
+                        role="assistant",
+                        content=el.content,
+                    )
+                )
             elif el.type == "user":
-                messages.append(ChatMessage.from_user(el.content))
+                messages.append(
+                    Message(
+                        role="user",
+                        content=el.content,
+                    )
+                )
             else:
                 raise HTTPException(
                     status_code=400,
@@ -81,7 +92,11 @@ class HaystackQA:
             ),
         )
 
-        response = chat_agent.run(message=body.messages[-1].content).content
+        history = messages[:-1]
+        message = messages[-1]
+        response = chat_agent.run(message=message, history=history).content
+        if not isinstance(response, str):
+            raise Exception(f"Invalid response type: {type(response)}. Expected str.")
 
         logger.info(response)
 
