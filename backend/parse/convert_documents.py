@@ -1,3 +1,4 @@
+import psycopg
 import ray
 import ray.data
 
@@ -8,7 +9,6 @@ import uuid
 from typing import Dict
 import numpy as np
 
-from pyarrow import fs
 import os
 
 
@@ -89,11 +89,6 @@ def convert_documents(ds: ray.data.Dataset):
         ds: A ray.data.Dataset with a column containing links to PDFs.
     """
 
-    from pyarrow import fs
-
-    # Create a filesystem to store the converted documents in
-    filesys = fs.S3FileSystem(endpoint_override=os.getenv("AWS_ENDPOINT_URL"))
-
     # Convert PDFs to markdown documents
     ds = ds.map_batches(
         Converter,
@@ -103,5 +98,8 @@ def convert_documents(ds: ray.data.Dataset):
     )
     # Filter out the documents that had errors in them
     ds = ds.filter(lambda row: row["document"] is not None)
-    # Write dataset to filesystem
-    ds.write_parquet("s3://documents/", filesystem=filesys)
+    # Write dataset to Postgres
+    ds.write_sql(
+        "INSERT INTO documents VALUES(%s, %s)",
+        lambda: psycopg.connect(os.getenv("PG_CONN_STR")),
+    )
