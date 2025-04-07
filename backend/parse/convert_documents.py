@@ -4,6 +4,7 @@ import ray.data
 
 from docling.datamodel.base_models import InputFormat, ConversionStatus
 from agno.document import Document
+from llama_index.core import Document as LIDocument
 import uuid
 
 from typing import Dict
@@ -67,15 +68,16 @@ class Converter:
                 print(f"Error processing document at {link} - {result.errors}")
                 documents.append(None)
             else:
-                # Get the document contnt and create a Haystack document with it
+                # Get the document contnt and create a LlamaIndex document with it
                 dl_doc = result.document
-                agno_doc = Document(
-                    id=str(uuid.uuid4()),
-                    content=dl_doc.export_to_markdown(),
-                    meta_data=self.meta_extractor.extract_dl_doc_meta(dl_doc=dl_doc),
+                text = dl_doc.export_to_markdown()
+                li_doc = LIDocument(
+                    doc_id=str(uuid.uuid4()),
+                    text=text,
+                    metadata=self.meta_extractor.extract_dl_doc_meta(dl_doc=dl_doc),
                 )
                 # Convert our Agno document to a dictionary to store as text
-                json_doc = json.dumps(agno_doc.to_dict())
+                json_doc = json.dumps(li_doc.to_dict())
                 documents.append(json_doc)
         return {"link": input_batch["link"], "document": np.array(documents)}
 
@@ -89,11 +91,21 @@ def convert_documents(ds: ray.data.Dataset):
         ds: A ray.data.Dataset with a column containing links to PDFs.
     """
 
+    conn_str = os.getenv("PG_CONN_STR")
+    if conn_str is None:
+        raise Exception("Missing environment variable PG_CONN_STR")
+
+    # Drop the documents table if it exists
+    with psycopg.connect(conn_str) as conn:
+        conn.cursor().execute(
+            "CREATE TABLE IF NOT EXISTS documents (link TEXT PRIMARY KEY, document TEXT)"
+        )
+
     # Convert PDFs to markdown documents
     ds = ds.map_batches(
         Converter,
-        concurrency=8,  # Run 4 workers
-        batch_size=32,  # Send batches of 32 links
+        concurrency=8,  # Run 8 workers
+        batch_size=64,  # Send batches of 32 links
         num_gpus=1,  # Use 1 GPU per worker
     )
     # Filter out the documents that had errors in them
@@ -101,5 +113,5 @@ def convert_documents(ds: ray.data.Dataset):
     # Write dataset to Postgres
     ds.write_sql(
         "INSERT INTO documents VALUES(%s, %s)",
-        lambda: psycopg.connect(os.getenv("PG_CONN_STR")),
+        lambda: psycopg.connect(conn_str),
     )

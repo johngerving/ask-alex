@@ -11,8 +11,15 @@ from docling.datamodel.pipeline_options import (
 )
 from docling.datamodel.base_models import InputFormat
 
-from agno.vectordb.pgvector import PgVector, SearchType
-from agno.embedder.google import GeminiEmbedder
+from llama_index.core import Document
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.extractors import TitleExtractor
+from llama_index.core.ingestion import IngestionPipeline, IngestionCache
+
+from llama_index.vector_stores.postgres import PGVectorStore
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
 from document_cleaner import DocumentCleaner
 
 import psycopg
@@ -27,24 +34,26 @@ class DocumentIndexer:
     def __init__(self):
         import logging
 
-        from agno.vectordb.pgvector import PgVector, SearchType
-        from agno.embedder.google import GeminiEmbedder
-        from document_cleaner import DocumentCleaner
-
         self.logger = logging.getLogger("ray.data")
 
-        # Define pgvector document store to store the documents and their embeddings in
-        self.vector_db = PgVector(
-            table_name="agno_docs",
-            schema="public",
-            db_url=os.getenv("PG_CONN_STR"),
-            search_type=SearchType.vector,
-            embedder=GeminiEmbedder(),
+        vector_store = PGVectorStore(
+            connection_string=os.getenv("PG_CONN_STR"),
+            table_name="llamaindex_docs",
+            embed_dim=768,
+            hnsw_kwargs={
+                "hnsw_m": 16,
+                "hnsw_ef_construction": 64,
+                "hnsw_ef_search": 40,
+                "hnsw_dist_method": "vector_cosine_ops",
+            },
         )
-        self.document_cleaner = DocumentCleaner(
-            remove_empty_lines=True,
-            remove_repeated_substrings=True,
-            remove_regex="^\[\d+\]|\(\d+\)|\b[A-Z][a-z]+ et al\., \d{4}|\(\w+, \d{4}\)|doi:|http[s]?://",
+
+        self.pipeline = IngestionPipeline(
+            vector_store=vector_store,
+            transformations=[
+                SentenceSplitter(chunk_size=250, chunk_overlap=50),
+                HuggingFaceEmbedding(),
+            ],
         )
 
     def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
@@ -54,19 +63,13 @@ class DocumentIndexer:
         Args:
             batch: A dictionary with a column for links to PDFs.
         """
-        from agno.document import Document
         import json
 
-        # Get the text stored in each document, convert it to a dictionary, and convert each of those into an Agno Document
+        # Get the text stored in each document, convert it to a dictionary, and convert each of those into a LlamaIndex Document
         documents = [Document.from_dict(json.loads(doc)) for doc in batch["document"]]
 
         self.logger.info(f"Processing batch of size {len(documents)}")
-        # Clean the documents
-        documents = self.document_cleaner.clean(documents)
-        self.vector_db.insert(
-            documents=documents,
-            batch_size=len(batch),
-        )
+        self.pipeline.run(documents=documents)
 
         return batch
 
@@ -86,7 +89,7 @@ def index_documents():
 
     # Drop the documents table if it exists
     with psycopg.connect(conn_str) as conn:
-        conn.cursor().execute("DROP TABLE IF EXISTS agno_docs")
+        conn.cursor().execute("DROP TABLE IF EXISTS llamaindex_docs")
 
     # Read full documents from Postgres database
     ds = ray.data.read_sql("SELECT * FROM documents", lambda: psycopg.connect(conn_str))
@@ -96,5 +99,5 @@ def index_documents():
         DocumentIndexer,
         batch_size=32,
         num_gpus=1,  # 1 GPU per worker
-        concurrency=4,  # 4 workers
+        concurrency=8,  # 8 workers
     ).materialize()
