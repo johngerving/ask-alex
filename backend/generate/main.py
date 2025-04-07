@@ -1,5 +1,6 @@
 import os
 import re
+from typing import List
 
 from ray import serve
 import requests
@@ -9,9 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel
 
-from chat_agent import ChatWorkflow
+from chat_flow import ChatFlow
+from llama_index.core.llms import ChatMessage
+
 from agno.storage.postgres import PostgresStorage
-from agno.run.response import RunResponse
 
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -51,30 +53,29 @@ class RAGResponse(BaseModel):
 
 @serve.deployment
 @serve.ingress(app)
-class HaystackQA:
+class ChatQA:
     def __init__(self):
-        pass
+        self.workflow = ChatFlow(timeout=60, verbose=True)
 
     @app.post("/")
     async def run(self, body: RAGBody) -> RAGResponse:
-        from agno.models.message import Message
 
         # Run the pipeline with the user's query
-        messages = []
+        messages: List[ChatMessage] = []
 
         if len(body.messages) == 0:
             raise HTTPException(status_code=400, detail="Empty field 'messages'")
         for el in body.messages:
             if el.type == "assistant":
                 messages.append(
-                    Message(
+                    ChatMessage(
                         role="assistant",
                         content=el.content,
                     )
                 )
             elif el.type == "user":
                 messages.append(
-                    Message(
+                    ChatMessage(
                         role="user",
                         content=el.content,
                     )
@@ -85,16 +86,10 @@ class HaystackQA:
                     detail=f"Message type must be either 'assistant' or 'user'. Got {el.type}",
                 )
 
-        chat_agent = ChatWorkflow(
-            user_id="John",
-            storage=PostgresStorage(
-                table_name="chat_workflows", db_url=os.getenv("PG_CONN_STR")
-            ),
-        )
-
         history = messages[:-1]
         message = messages[-1]
-        response = chat_agent.run(message=message, history=history).content
+        response = str(await self.workflow.run(message=message, history=history))
+
         if not isinstance(response, str):
             raise Exception(f"Invalid response type: {type(response)}. Expected str.")
 
@@ -106,5 +101,5 @@ class HaystackQA:
         return RAGResponse(response=response)
 
 
-haystack_deployment = HaystackQA.bind()
+deployment = ChatQA.bind()
 # query = "What are the impacts of ammonium phosphate-based fire retardants on cyanobacteria growth?"
