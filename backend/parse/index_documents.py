@@ -62,6 +62,7 @@ class DocumentIndexer:
                 "hnsw_ef_search": 40,
                 "hnsw_dist_method": "vector_cosine_ops",
             },
+            hybrid_search=True,
         )
 
         self.pipeline = IngestionPipeline(
@@ -107,7 +108,7 @@ def index_documents():
 
     # Drop the documents table if it exists
     with psycopg.connect(conn_str) as conn:
-        conn.cursor().execute("DROP TABLE IF EXISTS llamaindex_docs")
+        conn.cursor().execute("DROP TABLE IF EXISTS data_llamaindex_docs")
 
     # Read full documents from Postgres database
     ds = ray.data.read_sql("SELECT * FROM documents", lambda: psycopg.connect(conn_str))

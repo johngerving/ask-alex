@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from tabnanny import verbose
 from textwrap import dedent
 from typing import Annotated, Dict, Iterator, Optional, Literal, List
 from urllib.parse import urlparse
@@ -22,6 +23,9 @@ from llama_index.core.llms import ChatMessage
 from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.postprocessor.colbert_rerank import ColbertRerank
+
 import yaml
 
 
@@ -76,6 +80,7 @@ class ChatFlow(Workflow):
         password=password,
         table_name="llamaindex_docs",
         schema_name="public",
+        hybrid_search=True,
         embed_dim=768,
         hnsw_kwargs={
             "hnsw_m": 16,
@@ -92,7 +97,31 @@ class ChatFlow(Workflow):
         ),
     )
 
-    retriever = index.as_retriever(similarity_top_k=8)
+    vector_retriever = index.as_retriever(
+        vector_store_query_mode="default",
+        similarity_top_k=10,
+        verbose=True,
+    )
+
+    text_retriever = index.as_retriever(
+        vector_store_query_mode="sparse", similarity_top_k=10
+    )
+
+    retriever = QueryFusionRetriever(
+        [vector_retriever, text_retriever],
+        similarity_top_k=50,
+        llm=small_llm,
+        num_queries=1,
+        mode="relative_score",
+        use_async=False,
+    )
+
+    reranker = ColbertRerank(
+        top_n=10,
+        model="colbert-ir/colbertv2.0",
+        tokenizer="colbert-ir/colbertv2.0",
+        keep_retrieval_score=True,
+    )
 
     @step
     async def route_chat_or_retrieval(
@@ -160,13 +189,6 @@ class ChatFlow(Workflow):
         message: ChatMessage = await ctx.get("message")
         history: List[ChatMessage] = await ctx.get("history")
 
-        # Create a retriever tool to search the knowledge base
-        retriever_tool = RetrieverTool.from_defaults(
-            retriever=self.retriever,
-            name="search_knowledge_base",
-            description="Search the knowledge base for relevant documents.",
-        )
-
         tools = [
             FunctionTool.from_defaults(
                 self._search_knowledge_base,
@@ -208,12 +230,17 @@ class ChatFlow(Workflow):
     ) -> str:
         """Search the knowledge base for relevant documents."""
         # Use the retriever to get relevant nodes
-        nodes = self.retriever.retrieve(query)
+        try:
+            nodes = self.retriever.retrieve(query)
+            nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
 
-        json_obj = [
-            {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
-        ]
+            json_obj = [
+                {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
+            ]
 
-        print(json.dumps(json_obj, indent=2))
+            print(json.dumps(json_obj, indent=2))
+        except Exception as e:
+            print(e)
+            raise
 
         return json.dumps(json_obj, indent=2)
