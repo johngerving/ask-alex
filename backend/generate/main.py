@@ -102,4 +102,3 @@ class ChatQA:
 
 
 deployment = ChatQA.bind()
-# query = "What are the impacts of ammonium phosphate-based fire retardants on cyanobacteria growth?"
