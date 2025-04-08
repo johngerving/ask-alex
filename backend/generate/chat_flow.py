@@ -17,11 +17,12 @@ from llama_index.core.workflow import (
 )
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.core.agent.workflow import ReActAgent, FunctionAgent
-from llama_index.core.tools import FunctionTool
+from llama_index.core.tools import FunctionTool, RetrieverTool
 from llama_index.core.llms import ChatMessage
 from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+import yaml
 
 
 class WorkflowStartEvent(StartEvent):
@@ -90,7 +91,8 @@ class ChatFlow(Workflow):
             model_name="sentence-transformers/all-mpnet-base-v2"
         ),
     )
-    query_engine = index.as_query_engine(llm=llm)
+
+    retriever = index.as_retriever(similarity_top_k=8)
 
     @step
     async def route_chat_or_retrieval(
@@ -158,6 +160,60 @@ class ChatFlow(Workflow):
         message: ChatMessage = await ctx.get("message")
         history: List[ChatMessage] = await ctx.get("history")
 
-        response = self.query_engine.query(message.content)
+        # Create a retriever tool to search the knowledge base
+        retriever_tool = RetrieverTool.from_defaults(
+            retriever=self.retriever,
+            name="search_knowledge_base",
+            description="Search the knowledge base for relevant documents.",
+        )
+
+        tools = [
+            FunctionTool.from_defaults(
+                self._search_knowledge_base,
+                name="search_knowledge_base",
+            )
+        ]
+
+        agent = FunctionAgent(
+            llm=self.llm,
+            system_prompt=dedent(
+                """\
+                You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Respond to the input as a friendly AI assistant, generating human-like text, and follow the instructions in the input if applicable. Make your responses comprehensive, informative, and thorough, using Markdown when appropriate. Use a conversational tone and provide helpful and informative responses.
+
+                Formulate an answer to user queries.
+
+                Follow these steps:
+                1. Think step-by-step about the query, expanding with more context if necessary.
+                2. ALWAYS use the `search_knowledge_base(query)` tool to get relevant documents.
+                3. Search the knowledge base as many times as you need to obtain relevant documents.
+                4. Use the retrieved documents to write a comprehensive answer to the query, discarding irrelevant documents. Provide inline citations of each document you use.
+
+                Finally, here are a set of rules that you MUST follow:
+                <rules>
+                - Use the `search_knowledge_base(query)` tool to retrieve documents from your knowledge base before answering the query.
+                - Do not use phrases like "based on the information provided" or "from the knowledge base".
+                - Always provide inline citations for any information you use to formulate your answer. These should be in the format [doc_id], where doc_id is the "doc_id" field of the document you are citing. Multiple citations should be written as [id_1][id_2].
+                </rules>
+                """
+            ),
+            tools=tools,
+        )
+
+        response = await agent.run(message, chat_history=history)
 
         return StopEvent(result=response)
+
+    def _search_knowledge_base(
+        self, query: Annotated[str, "The query to search the knowledge base for"]
+    ) -> str:
+        """Search the knowledge base for relevant documents."""
+        # Use the retriever to get relevant nodes
+        nodes = self.retriever.retrieve(query)
+
+        json_obj = [
+            {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
+        ]
+
+        print(json.dumps(json_obj, indent=2))
+
+        return json.dumps(json_obj, indent=2)
