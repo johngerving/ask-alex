@@ -20,6 +20,8 @@ from llama_index.core.ingestion import IngestionPipeline, IngestionCache
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
+from urllib.parse import urlparse
+
 from document_cleaner import DocumentCleaner
 
 import psycopg
@@ -36,9 +38,23 @@ class DocumentIndexer:
 
         self.logger = logging.getLogger("ray.data")
 
-        vector_store = PGVectorStore(
-            connection_string=os.getenv("PG_CONN_STR"),
+        pg_url = urlparse(os.getenv("PG_CONN_STR"))
+        host = pg_url.hostname
+        port = pg_url.port
+        database = pg_url.path[1:]
+        user = pg_url.username
+        password = pg_url.password
+
+        self.logger.info(f"{host} {port} {database} {user} {password}")
+
+        vector_store = PGVectorStore.from_params(
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password,
             table_name="llamaindex_docs",
+            schema_name="public",
             embed_dim=768,
             hnsw_kwargs={
                 "hnsw_m": 16,
@@ -52,7 +68,9 @@ class DocumentIndexer:
             vector_store=vector_store,
             transformations=[
                 SentenceSplitter(chunk_size=250, chunk_overlap=50),
-                HuggingFaceEmbedding(),
+                HuggingFaceEmbedding(
+                    model_name="sentence-transformers/all-mpnet-base-v2"
+                ),
             ],
         )
 
