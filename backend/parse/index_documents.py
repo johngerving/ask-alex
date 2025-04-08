@@ -38,6 +38,7 @@ class DocumentIndexer:
 
         self.logger = logging.getLogger("ray.data")
 
+        # Get Postgres credentials from connection string
         pg_url = urlparse(os.getenv("PG_CONN_STR"))
         host = pg_url.hostname
         port = pg_url.port
@@ -45,8 +46,7 @@ class DocumentIndexer:
         user = pg_url.username
         password = pg_url.password
 
-        self.logger.info(f"{host} {port} {database} {user} {password}")
-
+        # Vector store to store chunks + embeddings in
         vector_store = PGVectorStore.from_params(
             host=host,
             port=port,
