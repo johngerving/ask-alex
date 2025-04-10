@@ -93,7 +93,6 @@ class DocumentIndexer:
         return batch
 
 
-@ray.remote
 def index_documents():
     """
     Indexes a ray.data.Dataset containing links to PDFs stored in S3.
@@ -118,5 +117,5 @@ def index_documents():
         DocumentIndexer,
         batch_size=32,
         num_gpus=1,  # 1 GPU per worker
-        concurrency=8,  # 8 workers
+        concurrency=7,  # 8 workers
     ).materialize()

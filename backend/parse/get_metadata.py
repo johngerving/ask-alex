@@ -1,6 +1,9 @@
+from datetime import datetime
+import json
+from dateutil import parser
 import os
 
-from typing import Dict
+from typing import Any, Dict, List
 
 import psycopg
 import requests
@@ -15,13 +18,12 @@ import ray.data
 import logging
 
 
-@ray.remote
-def get_links() -> ray.data.Dataset:
+def get_metadata() -> ray.data.Dataset:
     """
     Gets a ray.data.Dataset containing a list of valid links to PDFs from Digital Commons.
 
     Returns:
-        ray.data.Dataset: A dataset with a column "link" containing links to valid PDFs.
+        ray.data.Dataset: A dataset with a column "link" containing links to valid PDFs, and a column "metadata" containing the metadata for a given document.
     """
 
     # Get the initial dataset
@@ -97,11 +99,13 @@ def dataset_from_digitalcommons() -> ray.data.Dataset:
 
     start = 0
     LIMIT = 500
-    links = []
+
+    ds_items: List[Dict[str, Any]] = []
+
     while True:
         # Get list of documents
         resp = session.get(
-            f"https://content-out.bepress.com/v2/digitalcommons.humboldt.edu/query?download_format=pdf&start={start}&limit={LIMIT}",
+            f"https://content-out.bepress.com/v2/digitalcommons.humboldt.edu/query?download_format=pdf&select_fields=all&start={start}&limit={LIMIT}",
             headers={"Authorization": os.getenv("API_TOKEN")},
         )
         body = resp.json()
@@ -135,30 +139,36 @@ def dataset_from_digitalcommons() -> ray.data.Dataset:
 
             # If the dataset already exists, search it see if the link already exists
             if ds_exists:
-                # Add the link if it doesn't already exist in the dataset
+                # Add the item if it doesn't already exist in the dataset
                 link = ray.get(existing_ds.get_async(result["download_link"]))
                 print(link)
                 if link is None:
                     logger.info(
                         f"Document {result['download_link']} not found in dataset. Adding to the new dataset."
                     )
-                    links.append(result["download_link"])
+                    ds_items.append(
+                        {
+                            "link": result["download_link"],
+                            "metadata": json.dumps(result),
+                        }
+                    )
                 else:
                     logger.info(
                         f"Document {result['download_link']} found in dataset. Ignoring."
                     )
             else:
-                # Add the link anyway if the dataset doesn't exist already
-                links.append(result["download_link"])
+                # Add the item anyway if the dataset doesn't exist already
+                ds_items.append(
+                    {"link": result["download_link"], "metadata": json.dumps(result)}
+                )
 
         start += LIMIT
 
-    if len(links) == 0:
-        raise Exception("Links are empty")
+    if len(ds_items) == 0:
+        raise Exception("dataset_items is empty")
 
     # Create a dataset from the numpy array
-    dataset = ray.data.from_numpy(np.array(links))
-    dataset = dataset.rename_columns({"data": "link"})
+    dataset = ray.data.from_items(ds_items)
     dataset = dataset.repartition(
         200
     ).materialize()  # Repartition to avoid being processed in one chunk

@@ -1,13 +1,14 @@
+import logging
 import psycopg
 import ray
 import ray.data
 
+from get_metadata import get_metadata
 from docling.datamodel.base_models import InputFormat, ConversionStatus
-from agno.document import Document
 from llama_index.core import Document as LIDocument
 import uuid
 
-from typing import Dict
+from typing import Any, Dict
 import numpy as np
 
 import os
@@ -42,10 +43,11 @@ class Converter:
             }
         )
 
+        self.logger = logging.getLogger("ray.data")
+
     def __call__(self, input_batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         import json
 
-        from agno.document import Document
         import uuid
 
         from docling.datamodel.base_models import ConversionStatus
@@ -63,7 +65,9 @@ class Converter:
         documents = []
 
         # Loop through the conversion results
-        for link, result in zip(input_batch["link"], conversion_results):
+        for link, metadata, result in zip(
+            input_batch["link"], input_batch["metadata"], conversion_results
+        ):
             if result.status == ConversionStatus.FAILURE:
                 print(f"Error processing document at {link} - {result.errors}")
                 documents.append(None)
@@ -71,10 +75,26 @@ class Converter:
                 # Get the document contnt and create a LlamaIndex document with it
                 dl_doc = result.document
                 text = dl_doc.export_to_markdown()
+
+                metadata_keys = [
+                    "title",
+                    "url",
+                    "download_link",
+                    "author",
+                    "publication_date",
+                    "discipline",
+                    "abstract",
+                ]
+                metadata: Dict[Any, Any] = json.loads(metadata)
+                metadata = {key: metadata.get(key) for key in metadata_keys}
+
                 li_doc = LIDocument(
                     doc_id=str(uuid.uuid4()),
                     text=text,
-                    metadata=self.meta_extractor.extract_dl_doc_meta(dl_doc=dl_doc),
+                    metadata={  # Combine the metadata from the conversion with our own
+                        **metadata,
+                        **self.meta_extractor.extract_dl_doc_meta(dl_doc=dl_doc),
+                    },
                 )
                 # Convert our Agno document to a dictionary to store as text
                 json_doc = json.dumps(li_doc.to_dict())
@@ -82,8 +102,7 @@ class Converter:
         return {"link": input_batch["link"], "document": np.array(documents)}
 
 
-@ray.remote
-def convert_documents(ds: ray.data.Dataset):
+def convert_documents():
     """
     Converts a dataset containing links to PDFs to markdown documents.
 
@@ -98,13 +117,15 @@ def convert_documents(ds: ray.data.Dataset):
     # Drop the documents table if it exists
     with psycopg.connect(conn_str) as conn:
         conn.cursor().execute(
-            "CREATE TABLE IF NOT EXISTS documents (link TEXT PRIMARY KEY, document TEXT)"
+            "CREATE TABLE IF NOT EXISTS documents (link TEXT, document TEXT)"
         )
+
+    ds = get_metadata()
 
     # Convert PDFs to markdown documents
     ds = ds.map_batches(
         Converter,
-        concurrency=8,  # Run 8 workers
+        concurrency=7,  # Run 8 workers
         batch_size=64,  # Send batches of 32 links
         num_gpus=1,  # Use 1 GPU per worker
     )
