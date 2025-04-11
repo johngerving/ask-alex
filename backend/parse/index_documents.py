@@ -87,8 +87,40 @@ class DocumentIndexer:
         # Get the text stored in each document, convert it to a dictionary, and convert each of those into a LlamaIndex Document
         documents = [Document.from_dict(json.loads(doc)) for doc in batch["document"]]
 
+        for document in documents:
+            # Exclude some metadata keys from being shown to the LLM and passed to the embedder so as to preserve the chunk size
+            document.excluded_llm_metadata_keys = ["abstract", "url"]
+            document.excluded_embed_metadata_keys = [
+                "abstract",
+                "url",
+                "download_link",
+                "publication_date",
+            ]
+
+            # Filter discipline list
+            max_disciplines = 5
+            discipline = document.metadata.get("discipline")
+            if discipline is not None:
+                discipline = list(set(discipline))  # Only unique values
+                discipline = discipline[
+                    0 : min(max_disciplines, len(discipline))
+                ]  # Maximum of max_disciplines
+                document.metadata["discipline"] = discipline
+
+            # Limit number of authors shown in document
+            max_authors = 5
+            author = document.metadata.get("author")
+            if author is not None:
+                author = author[0 : min(max_authors, len(author))]
+                document.metadata["author"] = author
+
         self.logger.info(f"Processing batch of size {len(documents)}")
-        self.pipeline.run(documents=documents)
+        try:
+            self.pipeline.run(documents=documents)
+        except Exception as e:
+            self.logger.error(e)
+            self.logger.info([document.metadata for document in documents])
+            raise
 
         return batch
 
