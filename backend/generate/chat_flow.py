@@ -196,7 +196,7 @@ class ChatFlow(Workflow):
             )
         ]
 
-        agent = FunctionAgent(
+        agent = ReActAgent(
             llm=self.llm,
             system_prompt=dedent(
                 """\
