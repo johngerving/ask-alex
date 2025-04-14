@@ -6,3 +6,4 @@ __pycache__
 .pytest_cache
 runtime_env.yaml
 output.css
+plugins
