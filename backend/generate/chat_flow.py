@@ -25,6 +25,7 @@ from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.postprocessor.colbert_rerank import ColbertRerank
+from llama_index.core.agent.workflow import AgentStream
 
 import yaml
 
@@ -62,8 +63,12 @@ class ChatFlow(Workflow):
 
     small_llm = GoogleGenAI(model="gemini-2.0-flash-lite")
 
+    pg_conn_str = os.getenv("PG_CONN_STR")
+    if not pg_conn_str:
+        raise ValueError("PG_CONN_STR environment variable not set")
+
     # Get Postgres credentials from connection string
-    pg_url = urlparse(os.getenv("PG_CONN_STR"))
+    pg_url = urlparse(pg_conn_str)
     host = pg_url.hostname
     port = pg_url.port
     database = pg_url.path[1:]
@@ -221,7 +226,12 @@ class ChatFlow(Workflow):
             tools=tools,
         )
 
-        response = await agent.run(message, chat_history=history)
+        response = agent.run(message, chat_history=history)
+
+        async for ev in response.stream_events():
+            if isinstance(ev, AgentStream):
+                print(f"{ev.delta}", end="", flush=True)
+        await response
 
         return StopEvent(result=response)
 
@@ -229,16 +239,17 @@ class ChatFlow(Workflow):
         self, query: Annotated[str, "The query to search the knowledge base for"]
     ) -> str:
         """Search the knowledge base for relevant documents."""
+        print(f"Running search_knowledge_base with query: {query}")
         # Use the retriever to get relevant nodes
         try:
             nodes = self.retriever.retrieve(query)
+            print(f"Retrieved {len(nodes)} nodes")
             nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
+            print(f"Postprocessed {len(nodes)} nodes")
 
             json_obj = [
                 {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
             ]
-
-            print(json.dumps(json_obj, indent=2))
         except Exception as e:
             print(e)
             raise
