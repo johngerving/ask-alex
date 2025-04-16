@@ -1,19 +1,27 @@
 import os
 import re
-from typing import List
+from typing import Generator, List
 
+from fastapi.responses import StreamingResponse
 from ray import serve
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 
 from pydantic import BaseModel
+from sse_starlette import EventSourceResponse
 
 from chat_flow import ChatFlow
 from llama_index.core.llms import ChatMessage
-
-from agno.storage.postgres import PostgresStorage
+from llama_index.core.workflow import (
+    Event,
+    StartEvent,
+    StopEvent,
+    Context,
+    Workflow,
+    step,
+)
 
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -56,9 +64,11 @@ class RAGResponse(BaseModel):
 class ChatQA:
     def __init__(self):
         self.workflow = ChatFlow(timeout=60, verbose=True)
+        self.logger = logging.getLogger("ray.serve")
 
     @app.post("/")
-    async def run(self, body: RAGBody) -> RAGResponse:
+    async def run(self, request: Request) -> RAGResponse:
+        body = RAGBody(**await request.json())
 
         # Run the pipeline with the user's query
         messages: List[ChatMessage] = []
@@ -88,17 +98,42 @@ class ChatQA:
 
         history = messages[:-1]
         message = messages[-1]
-        response = str(await self.workflow.run(message=message, history=history))
 
-        if not isinstance(response, str):
-            raise Exception(f"Invalid response type: {type(response)}. Expected str.")
+        async def event_generator():
+            try:
+                self.logger.info(f"Running workflow")
+                handler = self.workflow.run(message=message, history=history)
 
-        logger.info(response)
+                async for ev in handler.stream_events():
+                    if await request.is_disconnected():
+                        self.logger.info("Disconnected")
+                        break
 
-        response = response.strip()
-        response = re.sub(r"\n\s*\n", "\n\n", response)
+                    self.logger.info(f"Event: {ev}")
 
-        return RAGResponse(response=response)
+                    yield {"event": "message", "data": str(ev)}
+
+                    # if isinstance(ev, StopEvent):
+                    #     self.logger.info(f"StopEvent: {ev.result}")
+                    #     result = ev.result
+                    #     result = result.strip()
+                    #     result = re.sub(r"\n\s*\n", "\n\n", result)
+
+                    #     yield {"event": "message", "data": str(ev.result)}
+
+                await handler
+                await handler
+                self.logger.info(f"Got to end of event stream")
+                self.logger.info(f"Handler: {handler}")
+                result = handler
+                self.logger.info(f"Result: {result}")
+
+                yield {"event": "message", "data": "test"}
+
+            except Exception as e:
+                self.logger.info(f"Exception: {e}")
+
+        return EventSourceResponse(event_generator())
 
 
 deployment = ChatQA.bind()

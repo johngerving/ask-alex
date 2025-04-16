@@ -183,6 +183,11 @@ class ChatFlow(Workflow):
         message = await ctx.get("message")
         history = await ctx.get("history")
 
+        class TestEvent(Event):
+            msg: str
+
+        ctx.write_event_to_stream(TestEvent(msg="test"))
+
         agent = FunctionAgent(
             llm=self.llm,
             system_prompt=dedent(
@@ -192,7 +197,7 @@ class ChatFlow(Workflow):
             ),
         )
 
-        response = await agent.run(message, chat_history=history)
+        response = agent.run(message, chat_history=history)
 
         return StopEvent(result=response)
 
@@ -231,13 +236,14 @@ class ChatFlow(Workflow):
                 - Use the `search_knowledge_base(query)` tool to retrieve documents from your knowledge base before answering the query.
                 - Do not use phrases like "based on the information provided" or "from the knowledge base".
                 - Always provide inline citations for any information you use to formulate your answer. These should be in the format [doc_id], where doc_id is the "doc_id" field of the document you are citing. Multiple citations should be written as [id_1][id_2].
+                    - Example: If you are citing a document with the doc_id "12345", you should write something like, "Apples fall to the ground in autum [12345]."
                 </rules>
                 """
             ),
             tools=tools,
         )
 
-        response = await agent.run(message, chat_history=history)
+        response = agent.run(message, chat_history=history)
 
         return AgentResponseEvent(response=str(response))
 
