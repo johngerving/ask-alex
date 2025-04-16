@@ -2,9 +2,9 @@ import { MessageType, type Message } from "$lib/types/message";
 
 import { PUBLIC_RAG_ENDPOINT } from "$env/static/public";
 
-export const sendMessages = async (messages: Message[]): Promise<Message> => {
+export const sendMessages = async (messages: Message[]) => {
     // Make a request to the RAG endpoint
-    const res = fetch(PUBLIC_RAG_ENDPOINT, {
+    const res = await fetch(PUBLIC_RAG_ENDPOINT, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -12,8 +12,21 @@ export const sendMessages = async (messages: Message[]): Promise<Message> => {
         body: JSON.stringify({ messages: messages }) // Pass in query as body of request
     });
 
+    const reader = res.body?.getReader();
+    const decoder = new TextDecoder('utf-8');
+    if(!reader)
+        throw new Error("Reader not found for response")
+
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) 
+            break;
+        console.log("Received", decoder.decode(value));
+    }
+
+
     // Wait for response
-    const json = await (await res).json();
+    const json = {response: ""}; 
     
     if(!('response' in json))
         throw new Error("Invalid response received: 'response' field not present");
