@@ -2,7 +2,7 @@ import { MessageType, type Message } from "$lib/types/message";
 
 import { PUBLIC_RAG_ENDPOINT } from "$env/static/public";
 
-export const sendMessages = async (messages: Message[]) => {
+export const sendMessages = async (messages: Message[], onResponse: (r: string) => void) => {
     // Make a request to the RAG endpoint
     const res = await fetch(PUBLIC_RAG_ENDPOINT, {
         method: 'POST',
@@ -17,26 +17,31 @@ export const sendMessages = async (messages: Message[]) => {
     if(!reader)
         throw new Error("Reader not found for response")
 
+    let response = "";
+
     while (true) {
         const { value, done } = await reader.read();
         if (done) 
             break;
-        console.log("Received", decoder.decode(value));
+        const lines = decoder.decode(value).split('\n');
+        let event = "";
+        let data = "";
+
+        for(const line of lines) {
+            if(line.startsWith("event:")) {
+                event = line.substring("event: ".length).trim()
+            }
+            if(line.startsWith("data:")) {
+                data = line.substring("data: ".length)
+            }
+        }
+
+        // console.log(event, data)
+
+        if (event === "delta") {
+            response += data;
+        }
+
+        onResponse(response)
     }
-
-
-    // Wait for response
-    const json = {response: ""}; 
-    
-    if(!('response' in json))
-        throw new Error("Invalid response received: 'response' field not present");
-        
-    const response: string = json.response;
-
-    const message: Message = {
-        content: response,
-        type: MessageType.Assistant
-    } 
-
-    return message
 }

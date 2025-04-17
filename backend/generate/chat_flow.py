@@ -17,6 +17,13 @@ from llama_index.core.workflow import (
     Workflow,
     step,
 )
+from llama_index.core.agent.workflow import (
+    AgentInput,
+    AgentOutput,
+    ToolCall,
+    ToolCallResult,
+    AgentStream,
+)
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.core.agent.workflow import ReActAgent, FunctionAgent
 from llama_index.core.tools import FunctionTool, RetrieverTool
@@ -58,7 +65,8 @@ class ChatOrRetrieval(BaseModel):
     )
 
 
-class AgentResponseEvent(Event):
+class WorkflowResponse(BaseModel):
+    delta: str
     response: str
 
 
@@ -218,6 +226,7 @@ class ChatFlow(Workflow):
         ]
 
         agent = ReActAgent(
+        agent = ReActAgent(
             llm=self.llm,
             system_prompt=dedent(
                 """\
@@ -243,14 +252,29 @@ class ChatFlow(Workflow):
             tools=tools,
         )
 
-        response = agent.run(message, chat_history=history)
+        handler = agent.run(message, chat_history=history)
 
-        return AgentResponseEvent(response=str(response))
+        response = ""
 
-    async def _search_knowledge_base(
-        self,
-        ctx: Context,
-        query: Annotated[str, "The query to search the knowledge base for"],
+        async for ev in handler.stream_events():
+            if isinstance(ev, AgentStream):
+                if ev.response and "Answer:" in ev.response:
+                    start_idx = ev.response.find("Answer:")
+                    if start_idx != -1:
+                        new_response = ev.response[start_idx + len("Answer:") :].strip()
+                        delta = new_response[len(response) :]
+                        response = new_response
+
+                        ctx.write_event_to_stream(
+                            WorkflowResponse(delta=delta, response=response)
+                        )
+
+        response = handler
+
+        return StopEvent(result=response)
+
+    def _search_knowledge_base(
+        self, query: Annotated[str, "The query to search the knowledge base for"]
     ) -> str:
         """Search the knowledge base for relevant documents."""
         print(f"Running search_knowledge_base with query: {query}")
@@ -268,6 +292,7 @@ class ChatFlow(Workflow):
             json_obj = [
                 {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
             ]
+
         except Exception as e:
             print(e)
             raise

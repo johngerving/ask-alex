@@ -46,6 +46,7 @@
 	"dependencies": {
 		"esbuild": "^0.25.0",
 		"marked": "^15.0.7",
-		"mode-watcher": "^0.5.1"
+		"mode-watcher": "^0.5.1",
+		"uuid": "^11.1.0"
 	}
 }

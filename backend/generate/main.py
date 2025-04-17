@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
-from chat_flow import ChatFlow
+from chat_flow import ChatFlow, WorkflowResponse
 from llama_index.core.llms import ChatMessage
 from llama_index.core.workflow import (
     Event,
@@ -21,6 +21,14 @@ from llama_index.core.workflow import (
     Context,
     Workflow,
     step,
+)
+
+from llama_index.core.agent.workflow import (
+    AgentInput,
+    AgentOutput,
+    ToolCall,
+    ToolCallResult,
+    AgentStream,
 )
 
 # from dotenv import load_dotenv
@@ -109,9 +117,8 @@ class ChatQA:
                         self.logger.info("Disconnected")
                         break
 
-                    self.logger.info(f"Event: {ev}")
-
-                    yield {"event": "message", "data": str(ev)}
+                    if isinstance(ev, WorkflowResponse):
+                        yield {"event": "delta", "data": ev.delta}
 
                     # if isinstance(ev, StopEvent):
                     #     self.logger.info(f"StopEvent: {ev.result}")
@@ -120,15 +127,11 @@ class ChatQA:
                     #     result = re.sub(r"\n\s*\n", "\n\n", result)
 
                     #     yield {"event": "message", "data": str(ev.result)}
-
-                await handler
-                await handler
                 self.logger.info(f"Got to end of event stream")
-                self.logger.info(f"Handler: {handler}")
-                result = handler
+                result = await handler
                 self.logger.info(f"Result: {result}")
 
-                yield {"event": "message", "data": "test"}
+                yield {"event": "response", "data": str(result)}
 
             except Exception as e:
                 self.logger.info(f"Exception: {e}")

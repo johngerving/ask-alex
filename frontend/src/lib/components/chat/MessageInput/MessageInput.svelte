@@ -7,8 +7,9 @@
 	import MaterialSymbolsSendOutlineRounded from '~icons/material-symbols/send-outline-rounded';
 	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
-	let { messages, addMessage }: { messages: Message[]; addMessage: (m: Message) => void } =
-		$props();
+	import {v4 as uuidv4} from 'uuid';
+
+	let { messages = $bindable<Message[]>() }: {messages: Message[]} = $props();
 
 	let text = $state('');
 
@@ -25,22 +26,38 @@
 	}
 
 	async function handleSend() {
-		// Add a message
-		addMessage({
-			content: text,
-			type: MessageType.User
-		});
+		let userMessageId = uuidv4();
+		let assistantMessageId = uuidv4();
 
-		const responsePromise = sendMessages(messages);
+		// Add a message
+		messages.push({
+			content: text,
+			type: MessageType.User,
+			id: userMessageId
+		})
+
+		let responseMessageSet = false;
+
+		sendMessages(messages, (response: string) => {
+			if(!responseMessageSet) {
+				messages.push({
+					content: "",
+					type: MessageType.Assistant,
+					id: assistantMessageId
+				})
+				responseMessageSet = true;
+			}
+			for(let i = messages.length - 1; i >= 0; i--) {
+				if(messages[i].id === assistantMessageId) {
+					messages[i].content = response;
+					break;
+				}
+			}
+		});
 
 		// Reset the input content
 		text = '';
 
-		// Wait for assistant to respond
-		const assistantResponse = await responsePromise;
-
-		// Add message with assistant response
-		addMessage(assistantResponse);
 	}
 </script>
 

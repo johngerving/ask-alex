@@ -8,9 +8,6 @@
 
 	let messages = $state<Message[]>([]);
 
-	const addMessage = (message: Message) => {
-		messages.push(message);
-	};
 </script>
 
 <Card.Root class="flex h-full w-full flex-col">
@@ -21,6 +18,6 @@
 		<Messages {messages} />
 	</Card.Content>
 	<Card.Footer class="w-full">
-		<MessageInput {messages} {addMessage} />
+		<MessageInput {messages} />
 	</Card.Footer>
 </Card.Root>
