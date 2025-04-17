@@ -1,4 +1,5 @@
 data
+plugins
 tmp
 .env
 __pycache__
