@@ -191,11 +191,6 @@ class ChatFlow(Workflow):
         message = await ctx.get("message")
         history = await ctx.get("history")
 
-        class TestEvent(Event):
-            msg: str
-
-        ctx.write_event_to_stream(TestEvent(msg="test"))
-
         agent = FunctionAgent(
             llm=self.llm,
             system_prompt=dedent(
@@ -210,9 +205,7 @@ class ChatFlow(Workflow):
         return StopEvent(result=response)
 
     @step
-    async def retrieve(
-        self, ctx: Context, ev: RetrievalRouteEvent
-    ) -> AgentResponseEvent:
+    async def retrieve(self, ctx: Context, ev: RetrievalRouteEvent) -> StopEvent:
         """Handle the retrieval route by searching the knowledge base for information."""
 
         message: ChatMessage = await ctx.get("message")
@@ -225,7 +218,6 @@ class ChatFlow(Workflow):
             )
         ]
 
-        agent = ReActAgent(
         agent = ReActAgent(
             llm=self.llm,
             system_prompt=dedent(
@@ -273,8 +265,10 @@ class ChatFlow(Workflow):
 
         return StopEvent(result=response)
 
-    def _search_knowledge_base(
-        self, query: Annotated[str, "The query to search the knowledge base for"]
+    async def _search_knowledge_base(
+        self,
+        ctx: Context,
+        query: Annotated[str, "The query to search the knowledge base for"],
     ) -> str:
         """Search the knowledge base for relevant documents."""
         print(f"Running search_knowledge_base with query: {query}")
@@ -299,29 +293,29 @@ class ChatFlow(Workflow):
 
         return json.dumps(json_obj, indent=2)
 
-    @step
-    async def generate_citations(
-        self, ctx: Context, ev: AgentResponseEvent
-    ) -> StopEvent:
-        sources: List[TextNode] = await ctx.get("sources")
-        response = ev.response
+    # @step
+    # async def generate_citations(
+    #     self, ctx: Context, ev: AgentResponseEvent
+    # ) -> StopEvent:
+    #     sources: List[TextNode] = await ctx.get("sources")
+    #     response = ev.response
 
-        sources_used: List[TextNode] = []
-        for source in sources:
-            if source.node_id[:8] in response and not any(
-                [s.node_id == source.node_id for s in sources_used]
-            ):
-                sources_used.append(source)
+    #     sources_used: List[TextNode] = []
+    #     for source in sources:
+    #         if source.node_id[:8] in response and not any(
+    #             [s.node_id == source.node_id for s in sources_used]
+    #         ):
+    #             sources_used.append(source)
 
-        for i, source in enumerate(sources_used):
-            print(source.node_id)
-            download_link = source.metadata.get("download_link")
-            node_id = source.node_id[:8]
-            if download_link is None:
-                response = response.replace(f"[{node_id}]", "")
-            else:
-                response = response.replace(
-                    f"[{node_id}]", f"[[{i+1}]]({source.metadata.get('download_link')})"
-                )
+    #     for i, source in enumerate(sources_used):
+    #         print(source.node_id)
+    #         download_link = source.metadata.get("download_link")
+    #         node_id = source.node_id[:8]
+    #         if download_link is None:
+    #             response = response.replace(f"[{node_id}]", "")
+    #         else:
+    #             response = response.replace(
+    #                 f"[{node_id}]", f"[[{i+1}]]({source.metadata.get('download_link')})"
+    #             )
 
-        return StopEvent(result=response)
+    #     return StopEvent(result=response)

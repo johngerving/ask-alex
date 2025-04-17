@@ -3,9 +3,10 @@
 	import { MessageType } from '$lib/types/message';
 	import { cn } from '$lib/utils';
 	import { marked } from 'marked';
-	import { fly, fade } from 'svelte/transition';
+	import { Motion } from 'svelte-motion';
 
 	let { message }: { message: Message } = $props();
+	let duration = 0.3;
 
 	// Display message differently if message is a user message vs. assistant message
 	let isUser: boolean = $derived(message.type === MessageType.User);
@@ -17,5 +18,6 @@
 		isUser ? 'bg-muted ml-auto' : 'bg-muted'
 	)}
 >
+		
 	{@html marked(message.content)}
 </div>

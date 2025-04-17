@@ -47,6 +47,7 @@
 		"esbuild": "^0.25.0",
 		"marked": "^15.0.7",
 		"mode-watcher": "^0.5.1",
+		"svelte-motion": "^0.12.2",
 		"uuid": "^11.1.0"
 	}
 }

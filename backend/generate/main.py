@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from typing import Generator, List
@@ -118,7 +119,7 @@ class ChatQA:
                         break
 
                     if isinstance(ev, WorkflowResponse):
-                        yield {"event": "delta", "data": ev.delta}
+                        yield {"event": "delta", "data": self._format_event(ev.delta)}
 
                     # if isinstance(ev, StopEvent):
                     #     self.logger.info(f"StopEvent: {ev.result}")
@@ -131,12 +132,16 @@ class ChatQA:
                 result = await handler
                 self.logger.info(f"Result: {result}")
 
-                yield {"event": "response", "data": str(result)}
+                yield {"event": "response", "data": self._format_event(str(result))}
 
             except Exception as e:
                 self.logger.info(f"Exception: {e}")
 
         return EventSourceResponse(event_generator())
+
+    def _format_event(self, event: str) -> str:
+        """Format the event to be sent to the client"""
+        return json.dumps({"v": event})
 
 
 deployment = ChatQA.bind()

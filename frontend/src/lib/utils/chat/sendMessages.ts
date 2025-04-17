@@ -39,7 +39,10 @@ export const sendMessages = async (messages: Message[], onResponse: (r: string) 
         // console.log(event, data)
 
         if (event === "delta") {
-            response += data;
+            let delta = JSON.parse(data);
+            if("v" in delta) {
+                response += delta.v;
+            }
         }
 
         onResponse(response)
