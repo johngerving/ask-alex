@@ -1,3 +1,4 @@
+import functools
 import json
 import logging
 import os
@@ -25,6 +26,8 @@ from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.postprocessor.colbert_rerank import ColbertRerank
+from llama_index.core.agent.workflow import AgentStream
+from llama_index.core.schema import TextNode
 
 import yaml
 
@@ -55,6 +58,10 @@ class ChatOrRetrieval(BaseModel):
     )
 
 
+class AgentResponseEvent(Event):
+    response: str
+
+
 class ChatFlow(Workflow):
     """The main workflow for Ask Alex."""
 
@@ -62,8 +69,12 @@ class ChatFlow(Workflow):
 
     small_llm = GoogleGenAI(model="gemini-2.0-flash-lite")
 
+    pg_conn_str = os.getenv("PG_CONN_STR")
+    if not pg_conn_str:
+        raise ValueError("PG_CONN_STR environment variable not set")
+
     # Get Postgres credentials from connection string
-    pg_url = urlparse(os.getenv("PG_CONN_STR"))
+    pg_url = urlparse(pg_conn_str)
     host = pg_url.hostname
     port = pg_url.port
     database = pg_url.path[1:]
@@ -99,12 +110,12 @@ class ChatFlow(Workflow):
 
     vector_retriever = index.as_retriever(
         vector_store_query_mode="default",
-        similarity_top_k=10,
+        similarity_top_k=50,
         verbose=True,
     )
 
     text_retriever = index.as_retriever(
-        vector_store_query_mode="sparse", similarity_top_k=10
+        vector_store_query_mode="sparse", similarity_top_k=50
     )
 
     retriever = QueryFusionRetriever(
@@ -133,6 +144,9 @@ class ChatFlow(Workflow):
         # Set global context variables for use in the entire workflow
         await ctx.set("message", ev.message)
         await ctx.set("history", ev.history)
+
+        sources: List[TextNode] = [TextNode(text="test")]
+        await ctx.set("sources", sources)
 
         # Call the LLM to determine the route
         json_obj: Dict[str, str] = sllm.chat(
@@ -183,7 +197,9 @@ class ChatFlow(Workflow):
         return StopEvent(result=response)
 
     @step
-    async def retrieve(self, ctx: Context, ev: RetrievalRouteEvent) -> StopEvent:
+    async def retrieve(
+        self, ctx: Context, ev: RetrievalRouteEvent
+    ) -> AgentResponseEvent:
         """Handle the retrieval route by searching the knowledge base for information."""
 
         message: ChatMessage = await ctx.get("message")
@@ -191,12 +207,12 @@ class ChatFlow(Workflow):
 
         tools = [
             FunctionTool.from_defaults(
-                self._search_knowledge_base,
+                async_fn=functools.partial(self._search_knowledge_base, ctx),
                 name="search_knowledge_base",
             )
         ]
 
-        agent = FunctionAgent(
+        agent = ReActAgent(
             llm=self.llm,
             system_prompt=dedent(
                 """\
@@ -223,24 +239,58 @@ class ChatFlow(Workflow):
 
         response = await agent.run(message, chat_history=history)
 
-        return StopEvent(result=response)
+        return AgentResponseEvent(response=str(response))
 
-    def _search_knowledge_base(
-        self, query: Annotated[str, "The query to search the knowledge base for"]
+    async def _search_knowledge_base(
+        self,
+        ctx: Context,
+        query: Annotated[str, "The query to search the knowledge base for"],
     ) -> str:
         """Search the knowledge base for relevant documents."""
+        print(f"Running search_knowledge_base with query: {query}")
         # Use the retriever to get relevant nodes
         try:
             nodes = self.retriever.retrieve(query)
+            print(f"Retrieved {len(nodes)} nodes")
             nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
+            print(f"Postprocessed {len(nodes)} nodes")
+
+            sources: List[TextNode] = await ctx.get("sources")
+            sources = sources + nodes
+            await ctx.set("sources", sources)
 
             json_obj = [
                 {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
             ]
-
-            print(json.dumps(json_obj, indent=2))
         except Exception as e:
             print(e)
             raise
 
         return json.dumps(json_obj, indent=2)
+
+    @step
+    async def generate_citations(
+        self, ctx: Context, ev: AgentResponseEvent
+    ) -> StopEvent:
+        sources: List[TextNode] = await ctx.get("sources")
+        response = ev.response
+
+        sources_used: List[TextNode] = []
+        for source in sources:
+            if source.node_id[:8] in response and not any(
+                [s.node_id == source.node_id for s in sources_used]
+            ):
+                sources_used.append(source)
+
+        for i, source in enumerate(sources_used):
+            print(source.node_id)
+            download_link = source.metadata.get("download_link")
+            node_id = source.node_id[:8]
+            if download_link is None:
+                response = response.replace(f"[{node_id}]", "")
+            else:
+                response = response.replace(
+                    f"[{node_id}]", f"[[{i+1}]]({source.metadata.get('download_link')})"
+                )
+
+        return StopEvent(result=response)
