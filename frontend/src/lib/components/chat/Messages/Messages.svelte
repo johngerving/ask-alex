@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { AssistantResponse } from '$lib/components/ui/assistantresponse';
 	import { ChatBubble } from '$lib/components/ui/chatbubble';
-	import type { Message } from '$lib/types/message';
+	import { MessageType, type Message } from '$lib/types/message';
 	import { scrollToBottom } from '$lib/utils/chat/scrollToBottom';
 
 	let { messages }: { messages: Message[] } = $props();
@@ -34,6 +35,10 @@
 	style="scrollbar-gutter: stable"
 >
 	{#each messages as message}
-		<ChatBubble {message} />
+		{#if message.type === MessageType.Assistant}
+			<AssistantResponse {message} />
+		{:else}
+			<ChatBubble {message} />
+		{/if}
 	{/each}
 </div>

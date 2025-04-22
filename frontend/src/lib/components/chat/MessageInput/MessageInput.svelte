@@ -7,9 +7,9 @@
 	import MaterialSymbolsSendOutlineRounded from '~icons/material-symbols/send-outline-rounded';
 	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
-	import {v4 as uuidv4} from 'uuid';
+	import { v4 as uuidv4 } from 'uuid';
 
-	let { messages = $bindable<Message[]>() }: {messages: Message[]} = $props();
+	let { messages = $bindable<Message[]>() }: { messages: Message[] } = $props();
 
 	let text = $state('');
 
@@ -34,30 +34,42 @@
 			content: text,
 			type: MessageType.User,
 			id: userMessageId
-		})
+		});
 
 		let responseMessageSet = false;
 
-		sendMessages(messages, (response: string) => {
-			if(!responseMessageSet) {
+		sendMessages(messages, {
+			onStart: () => {
 				messages.push({
-					content: "",
+					content: '',
 					type: MessageType.Assistant,
 					id: assistantMessageId
-				})
-				responseMessageSet = true;
-			}
-			for(let i = messages.length - 1; i >= 0; i--) {
-				if(messages[i].id === assistantMessageId) {
-					messages[i].content = response;
-					break;
+				});
+			},
+			onUpdate: (response: string) => {
+				for (let i = messages.length - 1; i >= 0; i--) {
+					if (messages[i].id === assistantMessageId) {
+						messages[i].content = response;
+						break;
+					}
 				}
+			},
+			onFinish: (response: string) => {
+				for (let i = messages.length - 1; i >= 0; i--) {
+					if (messages[i].id === assistantMessageId) {
+						messages[i].content = response;
+						break;
+					}
+				}
+				console.log('finish', response);
+			},
+			onError: (error: any) => {
+				console.log('error', error);
 			}
 		});
 
 		// Reset the input content
 		text = '';
-
 	}
 </script>
 

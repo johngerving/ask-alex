@@ -75,9 +75,9 @@ class WorkflowResponse(BaseModel):
 class ChatFlow(Workflow):
     """The main workflow for Ask Alex."""
 
-    llm = GoogleGenAI(model="gemini-2.0-flash")
+    llm = GoogleGenAI(model="gemini-2.0-flash", temperature=0)
 
-    small_llm = GoogleGenAI(model="gemini-2.0-flash-lite")
+    small_llm = GoogleGenAI(model="gemini-2.0-flash-lite", temperature=0)
 
     pg_conn_str = os.getenv("PG_CONN_STR")
     if not pg_conn_str:
@@ -265,22 +265,23 @@ class ChatFlow(Workflow):
 
         async for ev in handler.stream_events():
             if isinstance(ev, AgentStream) and ev.response and "Answer:" in ev.response:
+                print(ev)
                 start_idx = ev.response.find("Answer:")
                 if start_idx != -1:
                     curr_response = ev.response[start_idx + len("Answer:") :].strip()
 
-                    if not validate_brackets(curr_response):
-                        continue
+                    if validate_brackets(curr_response):
+                        curr_formatted_response = await self._generate_citations(
+                            ctx, curr_response
+                        )
+                        delta = curr_formatted_response[len(prev_formatted_response) :]
+                        prev_formatted_response = curr_formatted_response
 
-                    curr_formatted_response = await self._generate_citations(
-                        ctx, curr_response
-                    )
-                    delta = curr_formatted_response[len(prev_formatted_response) :]
-                    prev_formatted_response = curr_formatted_response
-
-                    ctx.write_event_to_stream(
-                        WorkflowResponse(delta=delta, response=curr_formatted_response)
-                    )
+                        ctx.write_event_to_stream(
+                            WorkflowResponse(
+                                delta=delta, response=curr_formatted_response
+                            )
+                        )
 
         curr_formatted_response = await self._generate_citations(ctx, curr_response)
         delta = curr_formatted_response[len(prev_formatted_response) :]
@@ -290,10 +291,12 @@ class ChatFlow(Workflow):
                 WorkflowResponse(delta=delta, response=curr_formatted_response)
             )
 
-        response = await handler
-        response = await self._generate_citations(ctx, response)
+        response = str(await handler)
+        sources: List[TextNode] = await ctx.get("sources")
 
-        return StopEvent(result=response)
+        formatted_response = await self._generate_citations(ctx, response)
+
+        return StopEvent(result=formatted_response)
 
     async def _search_knowledge_base(
         self,
