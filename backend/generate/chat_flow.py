@@ -38,6 +38,8 @@ from llama_index.core.schema import TextNode
 
 import yaml
 
+from utils import validate_brackets
+
 
 class WorkflowStartEvent(StartEvent):
     """Event to start the workflow."""
@@ -200,7 +202,17 @@ class ChatFlow(Workflow):
             ),
         )
 
-        response = agent.run(message, chat_history=history)
+        handler = agent.run(message, chat_history=history)
+
+        response = ""
+
+        async for ev in handler.stream_events():
+            if isinstance(ev, AgentStream) and ev.response:
+                ctx.write_event_to_stream(
+                    WorkflowResponse(delta=ev.delta, response=ev.response)
+                )
+
+        response = handler
 
         return StopEvent(result=response)
 
@@ -246,22 +258,40 @@ class ChatFlow(Workflow):
 
         handler = agent.run(message, chat_history=history)
 
-        response = ""
+        curr_response = ""
+
+        prev_formatted_response = ""
+        curr_formatted_response = ""
 
         async for ev in handler.stream_events():
-            if isinstance(ev, AgentStream):
-                if ev.response and "Answer:" in ev.response:
-                    start_idx = ev.response.find("Answer:")
-                    if start_idx != -1:
-                        new_response = ev.response[start_idx + len("Answer:") :].strip()
-                        delta = new_response[len(response) :]
-                        response = new_response
+            if isinstance(ev, AgentStream) and ev.response and "Answer:" in ev.response:
+                start_idx = ev.response.find("Answer:")
+                if start_idx != -1:
+                    curr_response = ev.response[start_idx + len("Answer:") :].strip()
 
-                        ctx.write_event_to_stream(
-                            WorkflowResponse(delta=delta, response=response)
-                        )
+                    if not validate_brackets(curr_response):
+                        continue
 
-        response = handler
+                    curr_formatted_response = await self._generate_citations(
+                        ctx, curr_response
+                    )
+                    delta = curr_formatted_response[len(prev_formatted_response) :]
+                    prev_formatted_response = curr_formatted_response
+
+                    ctx.write_event_to_stream(
+                        WorkflowResponse(delta=delta, response=curr_formatted_response)
+                    )
+
+        curr_formatted_response = await self._generate_citations(ctx, curr_response)
+        delta = curr_formatted_response[len(prev_formatted_response) :]
+
+        if len(delta) > 0:
+            ctx.write_event_to_stream(
+                WorkflowResponse(delta=delta, response=curr_formatted_response)
+            )
+
+        response = await handler
+        response = await self._generate_citations(ctx, response)
 
         return StopEvent(result=response)
 
@@ -293,29 +323,33 @@ class ChatFlow(Workflow):
 
         return json.dumps(json_obj, indent=2)
 
-    # @step
-    # async def generate_citations(
-    #     self, ctx: Context, ev: AgentResponseEvent
-    # ) -> StopEvent:
-    #     sources: List[TextNode] = await ctx.get("sources")
-    #     response = ev.response
+    async def _generate_citations(self, ctx: Context, text: str) -> str:
+        """Generate citations for a text response based on the sources used and replace them in the text.
 
-    #     sources_used: List[TextNode] = []
-    #     for source in sources:
-    #         if source.node_id[:8] in response and not any(
-    #             [s.node_id == source.node_id for s in sources_used]
-    #         ):
-    #             sources_used.append(source)
+        Args:
+            ctx (Context): The context object containing the sources.
+            text (str): The text response to generate citations for.
 
-    #     for i, source in enumerate(sources_used):
-    #         print(source.node_id)
-    #         download_link = source.metadata.get("download_link")
-    #         node_id = source.node_id[:8]
-    #         if download_link is None:
-    #             response = response.replace(f"[{node_id}]", "")
-    #         else:
-    #             response = response.replace(
-    #                 f"[{node_id}]", f"[[{i+1}]]({source.metadata.get('download_link')})"
-    #             )
+        Returns:
+            str: The text response with citations generated.
+        """
+        sources: List[TextNode] = await ctx.get("sources")
 
-    #     return StopEvent(result=response)
+        sources_used: List[TextNode] = []
+        for source in sources:
+            if source.node_id[:8] in text and not any(
+                [s.node_id == source.node_id for s in sources_used]
+            ):
+                sources_used.append(source)
+
+        for i, source in enumerate(sources_used):
+            download_link = source.metadata.get("download_link")
+            node_id = source.node_id[:8]
+            if download_link is None:
+                text = text.replace(f"[{node_id}]", "")
+            else:
+                text = text.replace(
+                    f"[{node_id}]", f"[[{i+1}]]({source.metadata.get('download_link')})"
+                )
+
+        return text

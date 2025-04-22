@@ -76,7 +76,7 @@ class ChatQA:
         self.logger = logging.getLogger("ray.serve")
 
     @app.post("/")
-    async def run(self, request: Request) -> RAGResponse:
+    async def run(self, request: Request) -> EventSourceResponse:
         body = RAGBody(**await request.json())
 
         # Run the pipeline with the user's query
@@ -119,6 +119,7 @@ class ChatQA:
                         break
 
                     if isinstance(ev, WorkflowResponse):
+                        self.logger.info(f"WorkflowResponse: {ev.delta}")
                         yield {"event": "delta", "data": self._format_event(ev.delta)}
 
                     # if isinstance(ev, StopEvent):
