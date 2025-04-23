@@ -121,6 +121,8 @@ class ChatQA:
                     if isinstance(ev, WorkflowResponse):
                         self.logger.info(f"WorkflowResponse: {ev.delta}")
                         yield {"event": "delta", "data": self._format_event(ev.delta)}
+                    else:
+                        self.logger.info(f"Event: {ev}")
 
                     # if isinstance(ev, StopEvent):
                     #     self.logger.info(f"StopEvent: {ev.result}")

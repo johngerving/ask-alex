@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ChatTextarea } from '$lib/components/ui/chattextarea';
 	import MaterialSymbolsSendOutlineRounded from '~icons/material-symbols/send-outline-rounded';
+	import MaterialSymbolsArrowUpwardRounded from '~icons/material-symbols/arrow-upward-rounded';
 	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
 	import { v4 as uuidv4 } from 'uuid';
@@ -36,20 +37,20 @@
 			id: userMessageId
 		});
 
-		let responseMessageSet = false;
-
 		sendMessages(messages, {
 			onStart: () => {
 				messages.push({
 					content: '',
 					type: MessageType.Assistant,
-					id: assistantMessageId
+					id: assistantMessageId,
+					status: 'waiting'
 				});
 			},
 			onUpdate: (response: string) => {
 				for (let i = messages.length - 1; i >= 0; i--) {
 					if (messages[i].id === assistantMessageId) {
 						messages[i].content = response;
+						messages[i].status = 'done';
 						break;
 					}
 				}
@@ -79,7 +80,7 @@
 		bind:value={text}
 		onkeydown={handleOnKeyDown}
 	/>
-	<Button type="submit" disabled={sendDisabled} class="h-11 w-11 p-0 transition-all">
-		<MaterialSymbolsSendOutlineRounded class="text-xl" />
+	<Button type="submit" disabled={sendDisabled} class="h-11 w-11 rounded-full p-0 transition-all">
+		<MaterialSymbolsArrowUpwardRounded class="m-2 h-full w-full text-xl" />
 	</Button>
 </form>

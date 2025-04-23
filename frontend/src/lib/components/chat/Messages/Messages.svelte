@@ -17,18 +17,14 @@
 <div
 	bind:this={ref}
 	use:scrollToBottom={messages}
-	class="flex
-    h-full
-    w-full flex-col gap-2
-    overflow-y-auto rounded-lg
-    border
-    px-2
-    py-4
+	class="[&::-webkit-scrollbar-track]:bg-background
+    flex
+    h-full w-full flex-col
+	gap-2 overflow-y-auto
     [&::-webkit-scrollbar-thumb]:rounded-full
-    [&::-webkit-scrollbar-thumb]:bg-gray-300
+    [&::-webkit-scrollbar-thumb]:bg-zinc-200
     dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500
     [&::-webkit-scrollbar-track]:rounded-full
-    [&::-webkit-scrollbar-track]:bg-gray-100
     dark:[&::-webkit-scrollbar-track]:bg-neutral-700
     [&::-webkit-scrollbar]:w-2
     "
