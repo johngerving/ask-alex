@@ -2,6 +2,7 @@ import json
 import os
 import re
 from typing import Generator, List
+from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
 from ray import serve
@@ -31,6 +32,7 @@ from llama_index.core.agent.workflow import (
     ToolCallResult,
     AgentStream,
 )
+from langfuse.llama_index import LlamaIndexInstrumentor
 
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -74,6 +76,11 @@ class ChatQA:
     def __init__(self):
         self.workflow = ChatFlow(timeout=60, verbose=True)
         self.logger = logging.getLogger("ray.serve")
+        self.instrumentor = LlamaIndexInstrumentor(
+            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+            host=os.getenv("LANGFUSE_HOST"),
+        )
 
     @app.post("/")
     async def run(self, request: Request) -> EventSourceResponse:
@@ -110,32 +117,38 @@ class ChatQA:
 
         async def event_generator():
             try:
-                self.logger.info(f"Running workflow")
-                handler = self.workflow.run(message=message, history=history)
+                with self.instrumentor.observe():
+                    self.logger.info(f"Running workflow")
+                    handler = self.workflow.run(message=message, history=history)
 
-                async for ev in handler.stream_events():
-                    if await request.is_disconnected():
-                        self.logger.info("Disconnected")
-                        break
+                    async for ev in handler.stream_events():
+                        if await request.is_disconnected():
+                            self.logger.info("Disconnected")
+                            break
 
-                    if isinstance(ev, WorkflowResponse):
-                        self.logger.info(f"WorkflowResponse: {ev.delta}")
-                        yield {"event": "delta", "data": self._format_event(ev.delta)}
-                    else:
-                        self.logger.info(f"Event: {ev}")
+                        if isinstance(ev, WorkflowResponse):
+                            self.logger.info(f"WorkflowResponse: {ev.delta}")
+                            yield {
+                                "event": "delta",
+                                "data": self._format_event(ev.delta),
+                            }
+                        else:
+                            self.logger.info(f"Event: {ev}")
 
-                    # if isinstance(ev, StopEvent):
-                    #     self.logger.info(f"StopEvent: {ev.result}")
-                    #     result = ev.result
-                    #     result = result.strip()
-                    #     result = re.sub(r"\n\s*\n", "\n\n", result)
+                        # if isinstance(ev, StopEvent):
+                        #     self.logger.info(f"StopEvent: {ev.result}")
+                        #     result = ev.result
+                        #     result = result.strip()
+                        #     result = re.sub(r"\n\s*\n", "\n\n", result)
 
-                    #     yield {"event": "message", "data": str(ev.result)}
-                self.logger.info(f"Got to end of event stream")
-                result = await handler
-                self.logger.info(f"Result: {result}")
+                        #     yield {"event": "message", "data": str(ev.result)}
+                    self.logger.info(f"Got to end of event stream")
+                    result = await handler
+                    self.logger.info(f"Result: {result}")
 
-                yield {"event": "response", "data": self._format_event(str(result))}
+                    yield {"event": "response", "data": self._format_event(str(result))}
+
+                self.instrumentor.flush()
 
             except Exception as e:
                 self.logger.info(f"Exception: {e}")
