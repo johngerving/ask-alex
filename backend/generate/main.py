@@ -111,6 +111,8 @@ class ChatQA:
         async def event_generator():
             try:
                 self.logger.info(f"Running workflow")
+                yield {"event": "start", "data": ""}
+
                 handler = self.workflow.run(message=message, history=history)
 
                 async for ev in handler.stream_events():

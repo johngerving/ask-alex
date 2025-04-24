@@ -39,6 +39,7 @@
 
 		sendMessages(messages, {
 			onStart: () => {
+				console.log('start');
 				messages.push({
 					content: '',
 					type: MessageType.Assistant,
