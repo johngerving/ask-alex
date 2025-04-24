@@ -12,13 +12,17 @@ export const sendMessages = async (
 	}
 ) => {
 	try {
+		const messagesCopy = messages.slice();
+
+		fns.onStart();
+
 		// Make a request to the RAG endpoint
 		const res = await fetch(PUBLIC_RAG_ENDPOINT, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ messages: messages }) // Pass in query as body of request
+			body: JSON.stringify({ messages: messagesCopy }) // Pass in query as body of request
 		});
 
 		const reader = res.body?.getReader();
@@ -26,8 +30,6 @@ export const sendMessages = async (
 		if (!reader) throw new Error('Reader not found for response');
 
 		let response = '';
-
-		fns.onStart();
 
 		while (true) {
 			const { value, done } = await reader.read();

@@ -1,6 +1,5 @@
 import functools
 import json
-import logging
 import os
 from tabnanny import verbose
 from textwrap import dedent
@@ -8,6 +7,7 @@ from typing import Annotated, Dict, Iterator, Optional, Literal, List
 from urllib.parse import urlparse
 import haystack
 from pydantic import BaseModel, Field
+from logging import Logger
 
 from llama_index.core.workflow import (
     Event,
@@ -35,8 +35,8 @@ from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.postprocessor.colbert_rerank import ColbertRerank
 from llama_index.core.agent.workflow import AgentStream
 from llama_index.core.schema import TextNode
+from llama_index.core import set_global_handler
 
-import yaml
 
 from utils import validate_brackets
 
@@ -74,6 +74,10 @@ class WorkflowResponse(BaseModel):
 
 class ChatFlow(Workflow):
     """The main workflow for Ask Alex."""
+
+    def __init__(self, logger: Logger, **kwargs):
+        super().__init__(**kwargs)
+        self.logger = logger
 
     llm = GoogleGenAI(model="gemini-2.0-flash", temperature=0)
 
@@ -130,25 +134,27 @@ class ChatFlow(Workflow):
 
     retriever = QueryFusionRetriever(
         [vector_retriever, text_retriever],
-        similarity_top_k=50,
+        similarity_top_k=10,
         llm=small_llm,
         num_queries=1,
         mode="relative_score",
         use_async=False,
     )
 
-    reranker = ColbertRerank(
-        top_n=10,
-        model="colbert-ir/colbertv2.0",
-        tokenizer="colbert-ir/colbertv2.0",
-        keep_retrieval_score=True,
-    )
+    # reranker = ColbertRerank(
+    #     top_n=10,
+    #     model="colbert-ir/colbertv2.0",
+    #     tokenizer="colbert-ir/colbertv2.0",
+    #     keep_retrieval_score=True,
+    # )
 
     @step
     async def route_chat_or_retrieval(
         self, ctx: Context, ev: StartEvent
     ) -> ChatRouteEvent | RetrievalRouteEvent:
         """Route the message to either chat or retrieval based on the message and history."""
+        self.logger.info("Routing chat or retrieval")
+
         sllm = self.small_llm.as_structured_llm(output_cls=ChatOrRetrieval)
 
         # Set global context variables for use in the entire workflow
@@ -189,6 +195,7 @@ class ChatFlow(Workflow):
     @step
     async def chat(self, ctx: Context, ev: ChatRouteEvent) -> StopEvent:
         """Handle the chat route by generating a response using the LLM."""
+        self.logger.info("Running step chat")
 
         message = await ctx.get("message")
         history = await ctx.get("history")
@@ -219,6 +226,7 @@ class ChatFlow(Workflow):
     @step
     async def retrieve(self, ctx: Context, ev: RetrievalRouteEvent) -> StopEvent:
         """Handle the retrieval route by searching the knowledge base for information."""
+        self.logger.info("Running retrieval step")
 
         message: ChatMessage = await ctx.get("message")
         history: List[ChatMessage] = await ctx.get("history")
@@ -329,6 +337,8 @@ class ChatFlow(Workflow):
 
         final_response = await self._generate_citations(ctx, response)
 
+        self.logger.info(f"Final response: {final_response}")
+
         return StopEvent(result=final_response)
 
     async def _search_knowledge_base(
@@ -337,13 +347,13 @@ class ChatFlow(Workflow):
         query: Annotated[str, "The query to search the knowledge base for"],
     ) -> str:
         """Search the knowledge base for relevant documents."""
-        print(f"Running search_knowledge_base with query: {query}")
+        self.logger.info(f"Running search_knowledge_base with query: {query}")
         # Use the retriever to get relevant nodes
         try:
             nodes = self.retriever.retrieve(query)
-            print(f"Retrieved {len(nodes)} nodes")
-            nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
-            print(f"Postprocessed {len(nodes)} nodes")
+            self.logger.info(f"Retrieved {len(nodes)} nodes")
+            # nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
+            # self.logger.info(f"Postprocessed {len(nodes)} nodes")
 
             sources: List[TextNode] = await ctx.get("sources")
             sources = sources + nodes
@@ -361,7 +371,7 @@ class ChatFlow(Workflow):
 
     def _think(self, thought: Annotated[str, "A thought to think about."]):
         """Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed."""
-        print("Thought:", thought)
+        self.logger.info(f"Thought: {thought}")
 
     async def _generate_citations(self, ctx: Context, text: str) -> str:
         """Generate citations for a text response based on the sources used and replace them in the text.
