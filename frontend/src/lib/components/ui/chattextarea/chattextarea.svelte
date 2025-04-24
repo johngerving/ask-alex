@@ -14,7 +14,6 @@
 		value;
 
 		if (ref instanceof HTMLTextAreaElement) {
-			console.log(ref.scrollHeight);
 			ref.style.height = '';
 			ref.style.height = Math.min(ref.scrollHeight + 2, 136) + 'px';
 		}

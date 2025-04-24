@@ -62,7 +62,6 @@
 						break;
 					}
 				}
-				console.log('finish', response);
 			},
 			onError: (error: any) => {
 				console.log('error', error);
