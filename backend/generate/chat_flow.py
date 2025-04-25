@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import haystack
 from pydantic import BaseModel, Field
 from logging import Logger
+import re
 
 from llama_index.core.workflow import (
     Event,
@@ -157,11 +158,17 @@ class ChatFlow(Workflow):
 
         sllm = self.small_llm.as_structured_llm(output_cls=ChatOrRetrieval)
 
+        # Only use the last n messages
+        n = 3
+        history: List[ChatMessage] = ev.history[max(0, len(ev.history) - n) :]
+        for m in history:
+            m.content = self._remove_citations(m.content)
+
         # Set global context variables for use in the entire workflow
         await ctx.set("message", ev.message)
-        await ctx.set("history", ev.history)
+        await ctx.set("history", history)
 
-        sources: List[TextNode] = [TextNode(text="test")]
+        sources: List[TextNode] = []
         await ctx.set("sources", sources)
 
         # Call the LLM to determine the route
@@ -277,8 +284,10 @@ class ChatFlow(Workflow):
                 - Use the `think(thought)` tool to reason about the current request and develop a plan of action.
                 - Use the `search_knowledge_base(query)` tool to retrieve documents from your knowledge base before answering the query.
                 - Do not use phrases like "based on the information provided" or "from the knowledge base".
-                - Always provide inline citations for any information you use to formulate your answer. These should be in the format [doc_id], where doc_id is the "doc_id" field of the document you are citing. Multiple citations should be written as [id_1][id_2].
-                    - Example: If you are citing a document with the doc_id "12345", you should write something like, "Apples fall to the ground in autum [12345]."
+                - Do not show your internal planning to the user. Only use the `think(thought)` tool to do so.
+                - Always provide inline citations for any information you use to formulate your answer, citing the doc_id field of the document you used. DO NOT hallucinate a document ID.
+                    - Example 1: If you are citing a document with the doc_id "asdfgh", you should write something like, "Apples fall to the ground in autum [asdfgh]."
+                    - Example 2: If you are citing two documents with the doc_ids "asdfgh" and "qwerty", you should write something like, "The sun rises in the east and sets in the west. [asdfgh][qwerty]."
                 </rules>
                 """
             ),
@@ -392,14 +401,31 @@ class ChatFlow(Workflow):
             ):
                 sources_used.append(source)
 
-        for i, source in enumerate(sources_used):
-            download_link = source.metadata.get("download_link")
-            node_id = source.node_id[:8]
-            if download_link is None:
-                text = text.replace(f"[{node_id}]", "")
-            else:
-                text = text.replace(
-                    f"[{node_id}]", f"[[{i+1}]]({source.metadata.get('download_link')})"
+        citations = re.findall("\[[^\]]*\]", text)
+        for citation in citations:
+            try:
+                matching_citation_idx = list(
+                    s.node_id[:8] in citation for s in sources_used
+                ).index(True)
+
+                download_link = sources_used[matching_citation_idx].metadata.get(
+                    "download_link"
                 )
+                if download_link is None:
+                    text = text.replace(citation, "")
+                    continue
+
+                text = text.replace(
+                    citation,
+                    f"[[{matching_citation_idx+1}]]({sources_used[matching_citation_idx].metadata.get('download_link')})",
+                )
+            except ValueError:
+                text = text.replace(citation, "")
 
         return text
+
+    def _remove_citations(self, text: str) -> str:
+        """Remove citations from a text response so as not to confuse the LLM."""
+        # Match patterns of the form [citation](link)
+        citations_removed = re.sub("\[(.*?)\]\((.*?)\)", "", text)
+        return citations_removed

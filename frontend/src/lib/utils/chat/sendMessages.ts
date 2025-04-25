@@ -49,6 +49,8 @@ export const sendMessages = async (
 
 			// console.log(event, data)
 
+			console.log(data);
+
 			if (event === 'delta') {
 				let delta = JSON.parse(data);
 				if ('v' in delta) {

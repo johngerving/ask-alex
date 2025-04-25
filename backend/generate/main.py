@@ -127,7 +127,6 @@ class ChatQA:
                         break
 
                     if isinstance(ev, WorkflowResponse):
-                        self.logger.info(f"WorkflowResponse: {ev.delta}")
                         yield {
                             "event": "delta",
                             "data": self._format_event(ev.delta),
