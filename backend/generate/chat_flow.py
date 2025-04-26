@@ -164,6 +164,8 @@ class ChatFlow(Workflow):
         for m in history:
             m.content = self._remove_citations(m.content)
 
+        self.logger.info(f"History: {history}")
+
         # Set global context variables for use in the entire workflow
         await ctx.set("message", ev.message)
         await ctx.set("history", history)
@@ -296,6 +298,10 @@ class ChatFlow(Workflow):
 
         handler = agent.run(message, chat_history=history)
 
+        async for ev in handler.stream_events():
+            print(ev)
+            self.logger.info(f"Event: {ev}")
+
         curr_response = ""
 
         prev_formatted_response = ""
@@ -412,14 +418,16 @@ class ChatFlow(Workflow):
                     "download_link"
                 )
                 if download_link is None:
-                    text = text.replace(citation, "")
-                    continue
+                    raise ValueError("download_link not found")
 
                 text = text.replace(
                     citation,
                     f"[[{matching_citation_idx+1}]]({sources_used[matching_citation_idx].metadata.get('download_link')})",
                 )
-            except ValueError:
+            except ValueError as e:
+                self.logger.info(
+                    f"Citation '{citation}' had the following ValueError: {e}"
+                )
                 text = text.replace(citation, "")
 
         return text

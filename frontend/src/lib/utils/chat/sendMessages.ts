@@ -7,7 +7,7 @@ export const sendMessages = async (
 	fns: {
 		onStart: () => void;
 		onUpdate: (response: string) => void;
-		onFinish: (response: string) => void;
+		onFinish: () => void;
 		onError: (error: any) => void;
 	}
 ) => {
@@ -32,43 +32,51 @@ export const sendMessages = async (
 		let response = '';
 
 		while (true) {
-			const { value, done } = await reader.read();
+			const { done, value } = await reader.read();
 			if (done) break;
-			const lines = decoder.decode(value).split('\n');
+			// console.log('VALUE:', JSON.stringify(decoder.decode(value)));
+			const groups = decoder.decode(value).split('\r\n\r\n');
 			let event = '';
 			let data = '';
 
-			for (const line of lines) {
-				if (line.startsWith('event:')) {
-					event = line.substring('event: '.length).trim();
+			for (const group of groups) {
+				const lines = group.split('\r\n');
+				console.log('LINES:', lines);
+				for (const line of lines) {
+					if (line.startsWith('event:')) {
+						event = line.substring('event: '.length).trim();
+					}
+					if (line.startsWith('data:')) {
+						data = line.substring('data: '.length);
+					}
 				}
-				if (line.startsWith('data:')) {
-					data = line.substring('data: '.length);
+
+				// console.log(event, data)
+
+				data = data.replaceAll('\n', '\n');
+
+				if (event === 'delta') {
+					let deltaObj = {};
+					try {
+						deltaObj = JSON.parse(data);
+						if ('v' in deltaObj) {
+							console.log('Delta: ', deltaObj);
+							const delta = deltaObj.v;
+							response += delta;
+						}
+					} catch (error) {
+						console.error('Error parsing delta:', error);
+					}
 				}
-			}
 
-			// console.log(event, data)
+				event = '';
+				data = '';
 
-			console.log(data);
-
-			if (event === 'delta') {
-				let delta = JSON.parse(data);
-				if ('v' in delta) {
-					response += delta.v;
-				}
-			}
-
-			fns.onUpdate(response);
-
-			if (event === 'response') {
-				let jsonObj = JSON.parse(data);
-				if ('v' in jsonObj) {
-					response = jsonObj.v;
-				}
+				fns.onUpdate(response);
 			}
 		}
 
-		fns.onFinish(response);
+		fns.onFinish();
 	} catch (error: any) {
 		fns.onError(error);
 	}

@@ -76,11 +76,11 @@ class ChatQA:
     def __init__(self):
         self.logger = logging.getLogger("ray.serve")
         self.workflow = ChatFlow(logger=self.logger, timeout=120, verbose=True)
-        # self.instrumentor = LlamaIndexInstrumentor(
-        #     public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-        #     secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-        #     host=os.getenv("LANGFUSE_HOST"),
-        # )
+        self.instrumentor = LlamaIndexInstrumentor(
+            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+            host=os.getenv("LANGFUSE_HOST"),
+        )
 
     @app.post("/")
     async def run(self, request: Request) -> EventSourceResponse:
@@ -117,37 +117,37 @@ class ChatQA:
 
         async def event_generator():
             try:
-                # with self.instrumentor.observe():
-                self.logger.info(f"Running workflow")
-                handler = self.workflow.run(message=message, history=history)
+                with self.instrumentor.observe():
+                    self.logger.info(f"Running workflow")
+                    handler = self.workflow.run(message=message, history=history)
 
-                async for ev in handler.stream_events():
-                    if await request.is_disconnected():
-                        self.logger.info("Disconnected")
-                        break
+                    async for ev in handler.stream_events():
+                        if await request.is_disconnected():
+                            self.logger.info("Disconnected")
+                            break
 
-                    if isinstance(ev, WorkflowResponse):
-                        yield {
-                            "event": "delta",
-                            "data": self._format_event(ev.delta),
-                        }
-                    else:
-                        self.logger.info(f"Event: {ev}")
+                        if isinstance(ev, WorkflowResponse):
+                            yield {
+                                "event": "delta",
+                                "data": self._format_event(ev.delta),
+                            }
+                        else:
+                            self.logger.info(f"Event: {ev}")
 
-                    # if isinstance(ev, StopEvent):
-                    #     self.logger.info(f"StopEvent: {ev.result}")
-                    #     result = ev.result
-                    #     result = result.strip()
-                    #     result = re.sub(r"\n\s*\n", "\n\n", result)
+                        # if isinstance(ev, StopEvent):
+                        #     self.logger.info(f"StopEvent: {ev.result}")
+                        #     result = ev.result
+                        #     result = result.strip()
+                        #     result = re.sub(r"\n\s*\n", "\n\n", result)
 
-                    #     yield {"event": "message", "data": str(ev.result)}
-                self.logger.info(f"Got to end of event stream")
-                result = await handler
-                self.logger.info(f"Result: {result}")
+                        #     yield {"event": "message", "data": str(ev.result)}
+                    self.logger.info(f"Got to end of event stream")
+                    result = await handler
+                    self.logger.info(f"Result: {result}")
 
-                yield {"event": "response", "data": self._format_event(str(result))}
+                    yield {"event": "response", "data": self._format_event(str(result))}
 
-                # self.instrumentor.flush()
+                self.instrumentor.flush()
 
             except Exception as e:
                 self.logger.info(f"Exception: {e}")
@@ -156,6 +156,7 @@ class ChatQA:
 
     def _format_event(self, event: str) -> str:
         """Format the event to be sent to the client"""
+        self.logger.info(f"Formatted event: {json.dumps({'v': event})}")
         return json.dumps({"v": event})
 
 
