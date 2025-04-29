@@ -125,9 +125,10 @@ def convert_documents():
     # Convert PDFs to markdown documents
     ds = ds.map_batches(
         Converter,
-        concurrency=7,  # Run 8 workers
+        concurrency=8,  # Run 8 workers
         batch_size=64,  # Send batches of 32 links
         num_gpus=1,  # Use 1 GPU per worker
+        num_cpus=2,  # Use 2 CPUs per worker
     )
     # Filter out the documents that had errors in them
     ds = ds.filter(lambda row: row["document"] is not None)
