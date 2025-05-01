@@ -70,6 +70,7 @@
 <form onsubmit={handleSend} class="flex w-full items-end gap-2">
 	<ChatTextarea
 		class="h-11 min-h-11 resize-none focus-visible:ring-offset-0"
+		spellcheck="false"
 		bind:value={text}
 		onkeydown={handleOnKeyDown}
 	/>

@@ -80,9 +80,9 @@ class ChatFlow(Workflow):
         super().__init__(**kwargs)
         self.logger = logger
 
-    llm = GoogleGenAI(model="gemini-2.0-flash", temperature=0)
+    llm = GoogleGenAI(model="gemini-2.0-flash")
 
-    small_llm = GoogleGenAI(model="gemini-2.0-flash-lite", temperature=0)
+    small_llm = GoogleGenAI(model="gemini-2.0-flash-lite")
 
     pg_conn_str = os.getenv("PG_CONN_STR")
     if not pg_conn_str:
@@ -245,10 +245,7 @@ class ChatFlow(Workflow):
                 fn=self._think,
                 name="think",
             ),
-            FunctionTool.from_defaults(
-                async_fn=functools.partial(self._search_knowledge_base, ctx),
-                name="search_knowledge_base",
-            ),
+            self._make_search_tool(ctx),
         ]
 
         agent = FunctionAgent(
@@ -297,10 +294,6 @@ class ChatFlow(Workflow):
         )
 
         handler = agent.run(message, chat_history=history)
-
-        async for ev in handler.stream_events():
-            print(ev)
-            self.logger.info(f"Event: {ev}")
 
         curr_response = ""
 
@@ -356,33 +349,36 @@ class ChatFlow(Workflow):
 
         return StopEvent(result=final_response)
 
-    async def _search_knowledge_base(
-        self,
-        ctx: Context,
-        query: Annotated[str, "The query to search the knowledge base for"],
-    ) -> str:
-        """Search the knowledge base for relevant documents."""
-        self.logger.info(f"Running search_knowledge_base with query: {query}")
-        # Use the retriever to get relevant nodes
-        try:
-            nodes = self.retriever.retrieve(query)
-            self.logger.info(f"Retrieved {len(nodes)} nodes")
-            # nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
-            # self.logger.info(f"Postprocessed {len(nodes)} nodes")
+    def _make_search_tool(self, ctx: Context):
+        async def search_knowledge_base(
+            query: Annotated[str, "The query to search the knowledge base for"],
+        ) -> str:
+            """Search the knowledge base for relevant documents."""
+            self.logger.info(f"Running search_knowledge_base with query: {query}")
+            # Use the retriever to get relevant nodes
+            try:
+                nodes = self.retriever.retrieve(query)
+                self.logger.info(f"Retrieved {len(nodes)} nodes")
+                # nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
+                # self.logger.info(f"Postprocessed {len(nodes)} nodes")
 
-            sources: List[TextNode] = await ctx.get("sources")
-            sources = sources + nodes
-            await ctx.set("sources", sources)
+                sources: List[TextNode] = await ctx.get("sources")
+                sources = sources + nodes
+                await ctx.set("sources", sources)
 
-            json_obj = [
-                {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
-            ]
+                json_obj = [
+                    {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
+                ]
 
-        except Exception as e:
-            print(e)
-            raise
+            except Exception as e:
+                print(e)
+                raise
 
-        return json.dumps(json_obj, indent=2)
+            return json.dumps(json_obj, indent=2)
+
+        return FunctionTool.from_defaults(
+            async_fn=search_knowledge_base,
+        )
 
     def _think(self, thought: Annotated[str, "A thought to think about."]):
         """Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed."""
