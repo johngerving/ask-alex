@@ -7,7 +7,7 @@ export const sendMessages = async (
 	fns: {
 		onStart: () => void;
 		onUpdate: (response: string) => void;
-		onFinish: () => void;
+		onFinish: (response: string) => void;
 		onError: (error: any) => void;
 	}
 ) => {
@@ -36,7 +36,7 @@ export const sendMessages = async (
 			if (done) break;
 			// console.log('VALUE:', JSON.stringify(decoder.decode(value)));
 			const groups = decoder.decode(value).split('\r\n\r\n');
-			let event = '';
+			let eventType = '';
 			let data = '';
 
 			for (const group of groups) {
@@ -44,7 +44,7 @@ export const sendMessages = async (
 				console.log('LINES:', lines);
 				for (const line of lines) {
 					if (line.startsWith('event:')) {
-						event = line.substring('event: '.length).trim();
+						eventType = line.substring('event: '.length).trim();
 					}
 					if (line.startsWith('data:')) {
 						data = line.substring('data: '.length);
@@ -55,29 +55,38 @@ export const sendMessages = async (
 
 				data = data.replaceAll('\n', '\n');
 
-				if (event === 'delta') {
+				if (eventType === 'delta') {
 					let deltaObj = {};
 					try {
-						deltaObj = JSON.parse(data);
-						if ('v' in deltaObj) {
-							console.log('Delta: ', deltaObj);
-							const delta = deltaObj.v;
-							response += delta;
-						}
+						const delta = parseData(data);
+						response += delta;
 					} catch (error) {
 						console.error('Error parsing delta:', error);
 					}
+				} else if (eventType === 'response') {
+					const finalResponse = parseData(data);
+					fns.onFinish(finalResponse);
+					return;
 				}
 
-				event = '';
+				eventType = '';
 				data = '';
 
 				fns.onUpdate(response);
 			}
 		}
-
-		fns.onFinish();
 	} catch (error: any) {
 		fns.onError(error);
+	}
+};
+
+const parseData = (data: string): string => {
+	let obj = {};
+	obj = JSON.parse(data);
+	if ('v' in obj) {
+		const value = obj.v as string;
+		return value;
+	} else {
+		throw new Error('Data missing "v" property');
 	}
 };

@@ -70,7 +70,6 @@ class ChatOrRetrieval(BaseModel):
 
 class WorkflowResponse(BaseModel):
     delta: str
-    response: str
 
 
 class ChatFlow(Workflow):
@@ -295,65 +294,64 @@ class ChatFlow(Workflow):
 
         handler = agent.run(message, chat_history=history)
 
-        curr_response = ""
+        full_raw_response = ""
+        buffer = ""  # Buffer for potentially incomplete citations
 
-        prev_formatted_response = ""
-        curr_formatted_response = ""
+        async for ev in handler.stream_events():
+            if isinstance(ev, AgentStream) and ev.delta:
+                # Prepend any leftover buffer from the previous delta
+                current_chunk = buffer + ev.delta
+                buffer = ""  # Clear buffer for now
 
-        response = str(await handler)
+                # Use regex to find citation patterns within chunk
+                # The capture group not only splits the citation from the rest of the text, but also captures the citation
+                citation_pattern = re.compile(r"(\[[^\]]*\])")
+                # Pattern for incomplete citation start at the end of the chunk
+                incomplete_citation_pattern = re.compile(r"(\[[^\]]*)$")
 
-        batch_len = 32
-        for start in range(0, len(response), batch_len):
-            end = min(start + batch_len, len(response))
+                parts = citation_pattern.split(current_chunk)
+                delta_to_send = ""
 
-            curr_response = response[:end]
+                for i, part in enumerate(parts):
+                    if i % 2 == 1:  # This is a complete citation found by a split
+                        full_raw_response += part
+                    else:  # This is text between citations or the final part
+                        # Check if this non-citation part ends with an incomplete citation start
+                        incomplete_match = incomplete_citation_pattern.search(part)
+                        if incomplete_match:
+                            # Hold back the incomplete part in the buffer
+                            incomplete_part = incomplete_match.group(1)
+                            text_part = part[: -len(incomplete_part)]
+                            buffer = incomplete_part  # Store for next delta
+                            full_raw_response += text_part  # Accumulate text part
+                            delta_to_send += text_part
+                        else:
+                            # No incomplete citation found, send/accumulate normally
+                            full_raw_response += part
+                            delta_to_send += part
 
-            if validate_brackets(curr_response):
-                curr_formatted_response = await self._generate_citations(
-                    ctx, curr_response
-                )
-                delta = curr_formatted_response[len(prev_formatted_response) :]
-                prev_formatted_response = curr_formatted_response
+                # Send the processed delta (without incomplete citation ends)
+                if delta_to_send:
+                    ctx.write_event_to_stream(WorkflowResponse(delta=delta_to_send))
 
-                ctx.write_event_to_stream(
-                    WorkflowResponse(delta=delta, response=curr_formatted_response)
-                )
+        # Process any remaining buffer content
+        if buffer:
+            self.logger.warning(f"Streaming ended with incomplete citation: {buffer}")
+            full_raw_response += buffer
 
-        # async for ev in handler.stream_events():
-        #     if isinstance(ev, AgentStream) and ev.response:
-        #         print(ev.delta, end="", flush=True)
-        #         curr_response = ev.response.strip()
+        final_formatted_response = await self._generate_citations(
+            ctx, full_raw_response
+        )
+        self.logger.info(f"Final response: {final_formatted_response}")
 
-        #         if validate_brackets(curr_response):
-        #             curr_formatted_response = await self._generate_citations(
-        #                 ctx, curr_response
-        #             )
-        #             delta = curr_formatted_response[len(prev_formatted_response) :]
-        #             prev_formatted_response = curr_formatted_response
-
-        #             ctx.write_event_to_stream(
-        #                 WorkflowResponse(delta=delta, response=curr_formatted_response)
-        #             )
-
-        curr_formatted_response = await self._generate_citations(ctx, curr_response)
-        delta = curr_formatted_response[len(prev_formatted_response) :]
-
-        if len(delta) > 0:
-            ctx.write_event_to_stream(
-                WorkflowResponse(delta=delta, response=curr_formatted_response)
-            )
-
-        final_response = await self._generate_citations(ctx, response)
-
-        self.logger.info(f"Final response: {final_response}")
-
-        return StopEvent(result=final_response)
+        return StopEvent(result=final_formatted_response)
 
     def _make_search_tool(self, ctx: Context):
         async def search_knowledge_base(
             query: Annotated[str, "The query to search the knowledge base for"],
         ) -> str:
             """Search the knowledge base for relevant documents."""
+            print("Begin search")
             self.logger.info(f"Running search_knowledge_base with query: {query}")
             # Use the retriever to get relevant nodes
             try:
@@ -373,6 +371,8 @@ class ChatFlow(Workflow):
             except Exception as e:
                 print(e)
                 raise
+
+            print("End search")
 
             return json.dumps(json_obj, indent=2)
 

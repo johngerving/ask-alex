@@ -74,7 +74,7 @@ class Converter:
             else:
                 # Get the document contnt and create a LlamaIndex document with it
                 dl_doc = result.document
-                text = dl_doc.export_to_markdown()
+                text = json.dumps(dl_doc.export_to_dict())
 
                 metadata_keys = [
                     "title",
