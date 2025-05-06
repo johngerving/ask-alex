@@ -34,9 +34,11 @@ from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.postprocessor.colbert_rerank import ColbertRerank
+from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.agent.workflow import AgentStream
 from llama_index.core.schema import TextNode
 from llama_index.core import set_global_handler
+from llama_index.core.schema import MetadataMode
 
 
 from utils import validate_brackets
@@ -136,17 +138,9 @@ class ChatFlow(Workflow):
         [vector_retriever, text_retriever],
         similarity_top_k=10,
         llm=small_llm,
-        num_queries=1,
+        num_queries=3,
         mode="relative_score",
-        use_async=False,
     )
-
-    # reranker = ColbertRerank(
-    #     top_n=10,
-    #     model="colbert-ir/colbertv2.0",
-    #     tokenizer="colbert-ir/colbertv2.0",
-    #     keep_retrieval_score=True,
-    # )
 
     @step
     async def route_chat_or_retrieval(
@@ -280,12 +274,12 @@ class ChatFlow(Workflow):
                 Finally, here are a set of rules that you MUST follow:
                 <rules>
                 - Use the `think(thought)` tool to reason about the current request and develop a plan of action.
-                - Use the `search_knowledge_base(query)` tool to retrieve documents from your knowledge base before answering the query.
+                - Use the `search_knowledge_base(query)` tool to retrieve document chunks from your knowledge base before answering the query.
                 - Do not use phrases like "based on the information provided" or "from the knowledge base".
                 - Do not show your internal planning to the user. Only use the `think(thought)` tool to do so.
-                - Always provide inline citations for any information you use to formulate your answer, citing the doc_id field of the document you used. DO NOT hallucinate a document ID.
-                    - Example 1: If you are citing a document with the doc_id "asdfgh", you should write something like, "Apples fall to the ground in autum [asdfgh]."
-                    - Example 2: If you are citing two documents with the doc_ids "asdfgh" and "qwerty", you should write something like, "The sun rises in the east and sets in the west. [asdfgh][qwerty]."
+                - Always provide inline citations for any information you use to formulate your answer, citing the id field of the chunk you used. DO NOT hallucinate a chunk id.
+                    - Example 1: If you are citing a document with the id "asdfgh", you should write something like, "Apples fall to the ground in autum [asdfgh]."
+                    - Example 2: If you are citing two documents with the ids "asdfgh" and "qwerty", you should write something like, "The sun rises in the east and sets in the west. [asdfgh][qwerty]."
                 </rules>
                 """
             ),
@@ -350,31 +344,35 @@ class ChatFlow(Workflow):
         async def search_knowledge_base(
             query: Annotated[str, "The query to search the knowledge base for"],
         ) -> str:
-            """Search the knowledge base for relevant documents."""
-            print("Begin search")
+            """Search the knowledge base for relevant chunks from documents."""
             self.logger.info(f"Running search_knowledge_base with query: {query}")
             # Use the retriever to get relevant nodes
             try:
-                nodes = self.retriever.retrieve(query)
+                nodes = await self.retriever.aretrieve(query)
                 self.logger.info(f"Retrieved {len(nodes)} nodes")
-                # nodes = self.reranker.postprocess_nodes(nodes, query_str=query)
-                # self.logger.info(f"Postprocessed {len(nodes)} nodes")
 
                 sources: List[TextNode] = await ctx.get("sources")
                 sources = sources + nodes
                 await ctx.set("sources", sources)
 
-                json_obj = [
-                    {"doc_id": node.node_id[:8], "content": node.text} for node in nodes
-                ]
+                content = ""
+
+                for node in nodes:
+                    content += (
+                        "<chunk id={doc_id}>\n" "{content}\n" "</chunk>\n"
+                    ).format(
+                        doc_id=node.node_id[:8],
+                        content=node.get_content(metadata_mode=MetadataMode.LLM),
+                    )
+                    self.logger.info(node.get_content(metadata_mode=MetadataMode.EMBED))
+
+                print(content)
 
             except Exception as e:
-                print(e)
+                self.logger.error(e)
                 raise
 
-            print("End search")
-
-            return json.dumps(json_obj, indent=2)
+            return content
 
         return FunctionTool.from_defaults(
             async_fn=search_knowledge_base,

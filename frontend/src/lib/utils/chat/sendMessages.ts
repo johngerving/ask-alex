@@ -60,19 +60,19 @@ export const sendMessages = async (
 					try {
 						const delta = parseData(data);
 						response += delta;
+						fns.onUpdate(response);
 					} catch (error) {
 						console.error('Error parsing delta:', error);
 					}
 				} else if (eventType === 'response') {
 					const finalResponse = parseData(data);
+					fns.onUpdate(finalResponse);
 					fns.onFinish(finalResponse);
 					return;
 				}
 
 				eventType = '';
 				data = '';
-
-				fns.onUpdate(response);
 			}
 		}
 	} catch (error: any) {

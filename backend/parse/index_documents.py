@@ -10,10 +10,12 @@ from docling.datamodel.pipeline_options import (
     PdfPipelineOptions,
 )
 from docling.datamodel.base_models import InputFormat
+from docling.chunking import HybridChunker
 
 from llama_index.core import Document
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core.node_parser import SentenceSplitter
+from llama_index.node_parser.docling import DoclingNodeParser
 from llama_index.core.extractors import TitleExtractor
 from llama_index.core.ingestion import IngestionPipeline, IngestionCache
 
@@ -68,7 +70,11 @@ class DocumentIndexer:
         self.pipeline = IngestionPipeline(
             vector_store=vector_store,
             transformations=[
-                SentenceSplitter(chunk_size=250, chunk_overlap=50),
+                DoclingNodeParser(
+                    chunker=HybridChunker(
+                        max_tokens=500,
+                    )
+                ),
                 HuggingFaceEmbedding(
                     model_name="sentence-transformers/all-mpnet-base-v2"
                 ),
