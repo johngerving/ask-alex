@@ -47,7 +47,6 @@
 				});
 			},
 			onUpdate: (response: string) => {
-				console.log(response);
 				for (let i = messages.length - 1; i >= 0; i--) {
 					if (messages[i].id === assistantMessageId) {
 						messages[i].content = response;

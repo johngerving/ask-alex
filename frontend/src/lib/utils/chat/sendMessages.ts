@@ -34,14 +34,12 @@ export const sendMessages = async (
 		while (true) {
 			const { done, value } = await reader.read();
 			if (done) break;
-			// console.log('VALUE:', JSON.stringify(decoder.decode(value)));
 			const groups = decoder.decode(value).split('\r\n\r\n');
 			let eventType = '';
 			let data = '';
 
 			for (const group of groups) {
 				const lines = group.split('\r\n');
-				console.log('LINES:', lines);
 				for (const line of lines) {
 					if (line.startsWith('event:')) {
 						eventType = line.substring('event: '.length).trim();
@@ -50,8 +48,6 @@ export const sendMessages = async (
 						data = line.substring('data: '.length);
 					}
 				}
-
-				// console.log(event, data)
 
 				data = data.replaceAll('\n', '\n');
 
