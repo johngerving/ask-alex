@@ -95,12 +95,18 @@ class DocumentIndexer:
 
         for document in documents:
             # Exclude some metadata keys from being shown to the LLM and passed to the embedder so as to preserve the chunk size
-            document.excluded_llm_metadata_keys = ["abstract", "url"]
+            document.excluded_llm_metadata_keys = [
+                "abstract",
+                "url",
+                "download_link",
+                "dl_meta",
+            ]
             document.excluded_embed_metadata_keys = [
                 "abstract",
                 "url",
                 "download_link",
                 "publication_date",
+                "dl_meta",
             ]
 
             # Filter discipline list

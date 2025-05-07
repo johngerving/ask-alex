@@ -41,7 +41,8 @@ from llama_index.core import set_global_handler
 from llama_index.core.schema import MetadataMode
 
 
-from utils import validate_brackets
+from prompts import CHAT_AGENT_PROMPT, RETRIEVAL_AGENT_PROMPT, ROUTER_AGENT_PROMPT
+from utils import generate_citations, remove_citations
 
 
 class WorkflowStartEvent(StartEvent):
@@ -98,7 +99,6 @@ class ChatFlow(Workflow):
     password = pg_url.password
 
     # Vector store to store chunks + embeddings in
-
     vector_store = PGVectorStore.from_params(
         host=host,
         port=port,
@@ -117,6 +117,7 @@ class ChatFlow(Workflow):
         },
     )
 
+    # Index the chunks, using HuggingFace embedding model
     index = VectorStoreIndex.from_vector_store(
         vector_store=vector_store,
         embed_model=HuggingFaceEmbedding(
@@ -124,21 +125,24 @@ class ChatFlow(Workflow):
         ),
     )
 
+    # Vector retriever
     vector_retriever = index.as_retriever(
         vector_store_query_mode="default",
         similarity_top_k=50,
         verbose=True,
     )
 
+    # Keyword retriever
     text_retriever = index.as_retriever(
         vector_store_query_mode="sparse", similarity_top_k=50
     )
 
+    # Fuse results from both retrievers
     retriever = QueryFusionRetriever(
         [vector_retriever, text_retriever],
         similarity_top_k=10,
         llm=small_llm,
-        num_queries=3,
+        num_queries=3,  # LLM generates extra queries
         mode="relative_score",
     )
 
@@ -155,7 +159,7 @@ class ChatFlow(Workflow):
         n = 3
         history: List[ChatMessage] = ev.history[max(0, len(ev.history) - n) :]
         for m in history:
-            m.content = self._remove_citations(m.content)
+            m.content = remove_citations(m.content)
 
         self.logger.info(f"History: {history}")
 
@@ -169,18 +173,7 @@ class ChatFlow(Workflow):
         # Call the LLM to determine the route
         json_obj: Dict[str, str] = sllm.chat(
             messages=[
-                ChatMessage(
-                    role="system",
-                    content=dedent(
-                        """\
-                        You are a router agent tasked with deciding whether to route a user message to a chat agent or a retrieval agent.
-                        You will receive a list of previous messages and the current user message.
-                        Use the following steps:
-                        1. Output a thought in which you reason through whether to route the message to the chat agent or the retrieval agent.
-                        2. Output the route you have chosen: either "chat" or "retrieval".
-                        """
-                    ),
-                ),
+                ChatMessage(role="system", content=ROUTER_AGENT_PROMPT),
                 ev.message,
             ]
         ).raw.dict()
@@ -204,17 +197,14 @@ class ChatFlow(Workflow):
 
         agent = FunctionAgent(
             llm=self.llm,
-            system_prompt=dedent(
-                """\
-                You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Respond to the input as a friendly AI assistant, generating human-like text, and follow the instructions in the input if applicable. Keep the response concise and engaging, using Markdown when appropriate. Use a conversational tone and provide helpful and informative responses. Do not provide information beyond what you are given in the context.
-                """
-            ),
+            system_prompt=CHAT_AGENT_PROMPT,
         )
 
         handler = agent.run(message, chat_history=history)
 
         response = ""
 
+        # Stream response from agent
         async for ev in handler.stream_events():
             if isinstance(ev, AgentStream) and ev.response:
                 ctx.write_event_to_stream(
@@ -241,48 +231,10 @@ class ChatFlow(Workflow):
             self._make_search_tool(ctx),
         ]
 
+        # Create main agent
         agent = FunctionAgent(
             llm=self.llm,
-            system_prompt=dedent(
-                """\
-                You are ALEX, a helpful AI assistant designed to provide information about Humboldt. Respond to the input as a friendly AI assistant, generating human-like text, and follow the instructions in the input if applicable. Make your responses comprehensive, informative, and thorough, using Markdown when appropriate. Use a conversational tone and provide helpful and informative responses.
-
-                Formulate an answer to user queries.
-
-                Follow these steps:
-                1. Think step-by-step about the query with the `think(thought)` tool, expanding with more context if necessary.
-                2. ALWAYS use the `search_knowledge_base(query)` tool to get relevant documents.
-                3. Search the knowledge base as many times as you need to obtain relevant documents.
-                4. Use the retrieved documents to write a comprehensive answer to the query, discarding irrelevant documents. Provide inline citations of each document you use.
-
-                ## Using the think tool
-
-                Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to:
-                - Create a plan of action
-                - List the specific rules that apply to the current request
-                - Check if all required information is collected
-                - Verify that the planned action complies with all policies
-                - Iterate over tool results for correctness
-
-                Here is an example of what to iterate over inside the think tool:
-                <think_tool_example>
-                I need to search the knowledge base for information about redwood trees.
-                I should verify that the context is sufficient to answer a question about redwood trees comprehensively once I'm done.
-                - Plan: collect missing info, verify relevancy, formulate answer
-                </think_tool_example>
-
-                Finally, here are a set of rules that you MUST follow:
-                <rules>
-                - Use the `think(thought)` tool to reason about the current request and develop a plan of action.
-                - Use the `search_knowledge_base(query)` tool to retrieve document chunks from your knowledge base before answering the query.
-                - Do not use phrases like "based on the information provided" or "from the knowledge base".
-                - Do not show your internal planning to the user. Only use the `think(thought)` tool to do so.
-                - Always provide inline citations for any information you use to formulate your answer, citing the id field of the chunk you used. DO NOT hallucinate a chunk id.
-                    - Example 1: If you are citing a document with the id "asdfgh", you should write something like, "Apples fall to the ground in autum [asdfgh]."
-                    - Example 2: If you are citing two documents with the ids "asdfgh" and "qwerty", you should write something like, "The sun rises in the east and sets in the west. [asdfgh][qwerty]."
-                </rules>
-                """
-            ),
+            system_prompt=RETRIEVAL_AGENT_PROMPT,
             tools=tools,
         )
 
@@ -333,9 +285,8 @@ class ChatFlow(Workflow):
             self.logger.warning(f"Streaming ended with incomplete citation: {buffer}")
             full_raw_response += buffer
 
-        final_formatted_response = await self._generate_citations(
-            ctx, full_raw_response
-        )
+        sources: List[TextNode] = await ctx.get("sources")
+        final_formatted_response = generate_citations(sources, full_raw_response)
         self.logger.info(f"Final response: {final_formatted_response}")
 
         return StopEvent(result=final_formatted_response)
@@ -346,11 +297,12 @@ class ChatFlow(Workflow):
         ) -> str:
             """Search the knowledge base for relevant chunks from documents."""
             self.logger.info(f"Running search_knowledge_base with query: {query}")
-            # Use the retriever to get relevant nodes
             try:
+                # Use the retriever to get relevant nodes
                 nodes = await self.retriever.aretrieve(query)
                 self.logger.info(f"Retrieved {len(nodes)} nodes")
 
+                # Get sources set in tool
                 sources: List[TextNode] = await ctx.get("sources")
                 sources = sources + nodes
                 await ctx.set("sources", sources)
@@ -358,6 +310,7 @@ class ChatFlow(Workflow):
                 content = ""
 
                 for node in nodes:
+                    # Format chunks to be returned to agent
                     content += (
                         "<chunk id={doc_id}>\n" "{content}\n" "</chunk>\n"
                     ).format(
@@ -365,8 +318,6 @@ class ChatFlow(Workflow):
                         content=node.get_content(metadata_mode=MetadataMode.LLM),
                     )
                     self.logger.info(node.get_content(metadata_mode=MetadataMode.EMBED))
-
-                print(content)
 
             except Exception as e:
                 self.logger.error(e)
@@ -381,53 +332,3 @@ class ChatFlow(Workflow):
     def _think(self, thought: Annotated[str, "A thought to think about."]):
         """Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed."""
         self.logger.info(f"Thought: {thought}")
-
-    async def _generate_citations(self, ctx: Context, text: str) -> str:
-        """Generate citations for a text response based on the sources used and replace them in the text.
-
-        Args:
-            ctx (Context): The context object containing the sources.
-            text (str): The text response to generate citations for.
-
-        Returns:
-            str: The text response with citations generated.
-        """
-        sources: List[TextNode] = await ctx.get("sources")
-
-        sources_used: List[TextNode] = []
-        for source in sources:
-            if source.node_id[:8] in text and not any(
-                [s.node_id == source.node_id for s in sources_used]
-            ):
-                sources_used.append(source)
-
-        citations = re.findall("\[[^\]]*\]", text)
-        for citation in citations:
-            try:
-                matching_citation_idx = list(
-                    s.node_id[:8] in citation for s in sources_used
-                ).index(True)
-
-                download_link = sources_used[matching_citation_idx].metadata.get(
-                    "download_link"
-                )
-                if download_link is None:
-                    raise ValueError("download_link not found")
-
-                text = text.replace(
-                    citation,
-                    f"[[{matching_citation_idx+1}]]({sources_used[matching_citation_idx].metadata.get('download_link')})",
-                )
-            except ValueError as e:
-                self.logger.info(
-                    f"Citation '{citation}' had the following ValueError: {e}"
-                )
-                text = text.replace(citation, "")
-
-        return text
-
-    def _remove_citations(self, text: str) -> str:
-        """Remove citations from a text response so as not to confuse the LLM."""
-        # Match patterns of the form [citation](link)
-        citations_removed = re.sub("\[(.*?)\]\((.*?)\)", "", text)
-        return citations_removed

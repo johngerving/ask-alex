@@ -89,6 +89,7 @@ class ChatQA:
         # Run the pipeline with the user's query
         messages: List[ChatMessage] = []
 
+        # Convert the request body to a list of LlamaIndex messages
         if len(body.messages) == 0:
             raise HTTPException(status_code=400, detail="Empty field 'messages'")
         for el in body.messages:
@@ -121,11 +122,13 @@ class ChatQA:
                     self.logger.info(f"Running workflow")
                     handler = self.workflow.run(message=message, history=history)
 
+                    # Read events from the workflow run
                     async for ev in handler.stream_events():
                         if await request.is_disconnected():
                             self.logger.info("Disconnected")
                             break
 
+                        # Stream events to the client
                         if isinstance(ev, WorkflowResponse):
                             yield {
                                 "event": "delta",
@@ -134,17 +137,13 @@ class ChatQA:
                         else:
                             self.logger.info(f"Event: {ev}")
 
-                        # if isinstance(ev, StopEvent):
-                        #     self.logger.info(f"StopEvent: {ev.result}")
-                        #     result = ev.result
-                        #     result = result.strip()
-                        #     result = re.sub(r"\n\s*\n", "\n\n", result)
-
-                        #     yield {"event": "message", "data": str(ev.result)}
                     self.logger.info(f"Got to end of event stream")
+
+                    # Get the final response from the workflow
                     result = await handler
                     self.logger.info(f"Result: {result}")
 
+                    # Stream the final response to the client
                     yield {"event": "response", "data": self._format_event(str(result))}
 
                 self.instrumentor.flush()
@@ -152,10 +151,11 @@ class ChatQA:
             except Exception as e:
                 self.logger.info(f"Exception: {e}")
 
+        # Start event stream
         return EventSourceResponse(event_generator())
 
     def _format_event(self, event: str) -> str:
-        """Format the event to be sent to the client"""
+        """Format the event as JSON to be sent to the client"""
         self.logger.info(f"Formatted event: {json.dumps({'v': event})}")
         return json.dumps({"v": event})
 

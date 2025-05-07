@@ -72,10 +72,11 @@ class Converter:
                 print(f"Error processing document at {link} - {result.errors}")
                 documents.append(None)
             else:
-                # Get the document contnt and create a LlamaIndex document with it
+                # Get the document content and create a LlamaIndex document with it
                 dl_doc = result.document
                 text = json.dumps(dl_doc.export_to_dict())
 
+                # Extract metadata from Digital Commons API
                 metadata_keys = [
                     "title",
                     "url",
@@ -96,7 +97,7 @@ class Converter:
                         **self.meta_extractor.extract_dl_doc_meta(dl_doc=dl_doc),
                     },
                 )
-                # Convert our Agno document to a dictionary to store as text
+                # Convert our document to a dictionary to store as text
                 json_doc = json.dumps(li_doc.to_dict())
                 documents.append(json_doc)
         return {"link": input_batch["link"], "document": np.array(documents)}
