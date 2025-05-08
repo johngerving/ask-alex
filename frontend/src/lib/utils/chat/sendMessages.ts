@@ -6,7 +6,7 @@ export const sendMessages = async (
 	messages: Message[],
 	fns: {
 		onStart: () => void;
-		onUpdate: (response: string) => void;
+		onUpdate: (delta: string) => void;
 		onFinish: (response: string) => void;
 		onError: (error: any) => void;
 	}
@@ -52,17 +52,15 @@ export const sendMessages = async (
 				data = data.replaceAll('\n', '\n');
 
 				if (eventType === 'delta') {
-					let deltaObj = {};
 					try {
 						const delta = parseData(data);
 						response += delta;
-						fns.onUpdate(response);
+						fns.onUpdate(delta);
 					} catch (error) {
 						console.error('Error parsing delta:', error);
 					}
 				} else if (eventType === 'response') {
 					const finalResponse = parseData(data);
-					fns.onUpdate(finalResponse);
 					fns.onFinish(finalResponse);
 					return;
 				}

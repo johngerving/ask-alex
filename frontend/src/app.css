@@ -105,4 +105,61 @@
 	body {
 		@apply bg-background text-foreground;
 	}
+	.markdown h1 {
+		@apply text-4xl;
+	}
+	.markdown h2 {
+		@apply text-3xl;
+	}
+	.markdown h3 {
+		@apply text-2xl;
+	}
+	.markdown h4 {
+		@apply text-xl;
+	}
+	.markdown h5 {
+		@apply text-lg;
+	}
+	.markdown h6 {
+		@apply text-base;
+	}
+
+	.markdown * {
+		animation: fade-in 0.4s ease-in-out;
+	}
+
+	@keyframes fade-in {
+		0% {
+			transform: translateY(0.5rem);
+			opacity: 0;
+		}
+		100% {
+			transform: translateY(0);
+			opacity: 1;
+		}
+	}
+
+	.markdown :is(p, pre) {
+		margin: 1rem 0;
+	}
+	.markdown :is(ul, ol) {
+		margin: 1rem 0 1rem 2rem;
+	}
+	.markdown :is(ul) {
+		list-style-type: disc;
+	}
+	.markdown :is(ol) {
+		list-style-type: decimal;
+	}
+	.markdown :is(h3, h4, h5, h6) {
+		margin: 1.5rem 0 1rem;
+		font-weight: bold;
+	}
+	.markdown :is(h1, h2) {
+		margin: 2rem 0 1rem;
+		font-weight: bold;
+	}
+	.markdown :not(pre) > code {
+		background-color: var(--bg-muted);
+	}
 }

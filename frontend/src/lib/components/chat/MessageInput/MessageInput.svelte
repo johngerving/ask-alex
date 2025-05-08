@@ -46,23 +46,23 @@
 					status: 'waiting'
 				});
 			},
-			onUpdate: (response: string) => {
+			onUpdate: (delta: string) => {
 				for (let i = messages.length - 1; i >= 0; i--) {
 					if (messages[i].id === assistantMessageId) {
-						messages[i].content = response;
+						messages[i].content += delta;
 						messages[i].status = 'done';
 						break;
 					}
 				}
 			},
 			onFinish: (response: string) => {
-				for (let i = messages.length - 1; i >= 0; i--) {
-					if (messages[i].id === assistantMessageId) {
-						messages[i].content = response;
-						messages[i].status = 'done';
-						break;
-					}
-				}
+				// for (let i = messages.length - 1; i >= 0; i--) {
+				// 	if (messages[i].id === assistantMessageId) {
+				// 		messages[i].content = response;
+				// 		messages[i].status = 'done';
+				// 		break;
+				// 	}
+				// }
 			},
 			onError: (error: any) => {
 				console.log('error', error);
