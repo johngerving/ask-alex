@@ -41,7 +41,7 @@ from llama_index.core import set_global_handler
 from llama_index.core.schema import MetadataMode
 
 
-from prompts import CHAT_AGENT_PROMPT, RETRIEVAL_AGENT_PROMPT, ROUTER_AGENT_PROMPT
+from prompts import BASE_PROMPT, RETRIEVAL_AGENT_PROMPT, ROUTER_AGENT_PROMPT
 from utils import generate_citations, remove_citations
 
 
@@ -197,7 +197,7 @@ class ChatFlow(Workflow):
 
         agent = FunctionAgent(
             llm=self.llm,
-            system_prompt=CHAT_AGENT_PROMPT,
+            system_prompt=BASE_PROMPT,
         )
 
         handler = agent.run(message, chat_history=history)
