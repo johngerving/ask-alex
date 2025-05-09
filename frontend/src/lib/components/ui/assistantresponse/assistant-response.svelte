@@ -1,17 +1,20 @@
 <script lang="ts">
-	import type { Message } from '$lib/types/message';
+	import { MessageStatus, type Message } from '$lib/types/message';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import * as smd from 'streaming-markdown';
+	import { marked } from 'marked';
+	import { fade } from 'svelte/transition';
 
 	let { message }: { message: Message } = $props();
 	let messageContent = $derived(message.content);
+
+	let isTyping = $state(false);
 
 	function markdown(node: HTMLElement, textContent: string) {
 		const renderer = smd.default_renderer(node);
 		let parser = smd.parser(renderer);
 
 		let characterQueue: string[] = [];
-		let isTyping = false;
 		let currentTimeoutId: ReturnType<typeof setTimeout> | undefined;
 		let previousText = ''; // Track fully typed text
 
@@ -46,6 +49,9 @@
 
 		return {
 			update(newTextContent: string) {
+				if (message.status === MessageStatus.Finished) {
+					return;
+				}
 				if (currentTimeoutId) {
 					clearTimeout(currentTimeoutId); // Clear pending timeout before processing new update
 					isTyping = false; // Reset typing flag
@@ -86,12 +92,33 @@
 	}
 </script>
 
-<div class="flex w-max max-w-[75%] flex-col gap-2 px-3 py-3">
-	{#if message.status === 'waiting'}
-		<Spinner />
-	{/if}
-	<div
-		use:markdown={messageContent}
-		class="markdown [&_a:hover]:underline [&_a]:text-blue-500"
-	></div>
+<div class="flex w-max max-w-[75%] gap-4 px-3">
+	<div class="relative min-w-8 self-stretch">
+		{#if message.status === MessageStatus.Started || isTyping}
+			<div transition:fade={{ duration: 200 }} class="absolute left-0 right-0 top-0 h-8 w-8">
+				<Spinner />
+			</div>
+		{:else}
+			<div
+				transition:fade={{ duration: 200 }}
+				class="absolute left-0 right-0 top-0 flex h-8 w-8 items-center justify-center"
+			>
+				<div
+					class="to-primary mx-auto h-4 w-4 rounded-full bg-gradient-to-br from-green-400 via-emerald-500 shadow-md"
+				></div>
+			</div>
+		{/if}
+	</div>
+	<div class="flex-grow">
+		{#if message.status === MessageStatus.Started || isTyping}
+			<div
+				use:markdown={messageContent}
+				class="markdown fade-in-chunks [&_a:hover]:underline [&_a]:text-blue-500"
+			></div>
+		{:else if message.status === MessageStatus.Finished}
+			<div class="markdown [&_a:hover]:underline [&_a]:text-blue-500">
+				{@html marked(message.content)}
+			</div>
+		{/if}
+	</div>
 </div>

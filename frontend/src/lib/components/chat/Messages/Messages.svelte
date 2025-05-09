@@ -1,14 +1,12 @@
 <script lang="ts">
 	import { AssistantResponse } from '$lib/components/ui/assistantresponse';
 	import { ChatBubble } from '$lib/components/ui/chatbubble';
-	import { MessageType, type Message } from '$lib/types/message';
 	import { scrollToBottom } from '$lib/utils/chat/scrollToBottom';
-
-	let { messages }: { messages: Message[] } = $props();
+	import { messageStore } from '$lib/state/messages.svelte';
 
 	$effect(() => {
 		// Scroll to the bottom of the messages when a new one is added
-		scrollToBottom(ref, messages);
+		scrollToBottom(ref, messageStore.messages);
 	});
 
 	let ref: Element;
@@ -16,11 +14,11 @@
 
 <div
 	bind:this={ref}
-	use:scrollToBottom={messages}
+	use:scrollToBottom={messageStore.messages}
 	class="[&::-webkit-scrollbar-track]:bg-background
     flex
     h-full w-full flex-col
-	gap-2 overflow-y-auto
+	gap-6 overflow-y-auto
     [&::-webkit-scrollbar-thumb]:rounded-full
     [&::-webkit-scrollbar-thumb]:bg-zinc-200
     dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500
@@ -30,8 +28,8 @@
     "
 	style="scrollbar-gutter: stable"
 >
-	{#each messages as message}
-		{#if message.type === MessageType.Assistant}
+	{#each messageStore.messages as message}
+		{#if message.role === 'assistant'}
 			<AssistantResponse {message} />
 		{:else}
 			<ChatBubble {message} />

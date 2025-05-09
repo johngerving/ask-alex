@@ -59,7 +59,7 @@ app.add_middleware(
 
 class RequestMessage(BaseModel):
     content: str
-    type: str
+    role: str
 
 
 class RAGBody(BaseModel):
@@ -93,14 +93,14 @@ class ChatQA:
         if len(body.messages) == 0:
             raise HTTPException(status_code=400, detail="Empty field 'messages'")
         for el in body.messages:
-            if el.type == "assistant":
+            if el.role == "assistant":
                 messages.append(
                     ChatMessage(
                         role="assistant",
                         content=el.content,
                     )
                 )
-            elif el.type == "user":
+            elif el.role == "user":
                 messages.append(
                     ChatMessage(
                         role="user",
@@ -110,7 +110,7 @@ class ChatQA:
             else:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Message type must be either 'assistant' or 'user'. Got {el.type}",
+                    detail=f"Message role must be either 'assistant' or 'user'. Got {el.role}",
                 )
 
         history = messages[:-1]

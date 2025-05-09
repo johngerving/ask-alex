@@ -1,4 +1,4 @@
-import { MessageType, type Message } from '$lib/types/message';
+import { type Message } from '$lib/types/message';
 
 import { PUBLIC_RAG_ENDPOINT } from '$env/static/public';
 

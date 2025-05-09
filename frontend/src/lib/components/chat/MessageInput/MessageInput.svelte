@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Message } from '$lib/types/message';
-	import { MessageType } from '$lib/types/message';
+	import { MessageStatus, MessageUpdateType } from '$lib/types/message';
+	import { messageStore } from '$lib/state/messages.svelte';
 
 	import { Button } from '$lib/components/ui/button';
 	import { ChatTextarea } from '$lib/components/ui/chattextarea';
@@ -8,9 +9,7 @@
 	import MaterialSymbolsArrowUpwardRounded from '~icons/material-symbols/arrow-upward-rounded';
 	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
-	import { v4 as uuidv4 } from 'uuid';
-
-	let { messages = $bindable<Message[]>() }: { messages: Message[] } = $props();
+	import { v4 } from 'uuid';
 
 	let text = $state('');
 
@@ -27,45 +26,44 @@
 	}
 
 	async function handleSend() {
-		let userMessageId = uuidv4();
-		let assistantMessageId = uuidv4();
+		let userMessageId = v4();
+		let assistantMessageId = v4();
 
 		// Add a message
-		messages.push({
+		messageStore.createMessage({
 			content: text,
-			type: MessageType.User,
-			id: userMessageId
+			role: 'user',
+			id: userMessageId,
+			status: MessageStatus.Finished
 		});
 
-		sendMessages(messages, {
+		sendMessages(messageStore.messages, {
 			onStart: () => {
-				messages.push({
+				messageStore.createMessage({
 					content: '',
-					type: MessageType.Assistant,
+					role: 'assistant',
 					id: assistantMessageId,
-					status: 'waiting'
+					status: MessageStatus.Started
 				});
 			},
 			onUpdate: (delta: string) => {
-				for (let i = messages.length - 1; i >= 0; i--) {
-					if (messages[i].id === assistantMessageId) {
-						messages[i].content += delta;
-						messages[i].status = 'done';
-						break;
-					}
-				}
+				messageStore.updateMessage(assistantMessageId, {
+					type: MessageUpdateType.Delta,
+					delta: delta
+				});
 			},
 			onFinish: (response: string) => {
-				// for (let i = messages.length - 1; i >= 0; i--) {
-				// 	if (messages[i].id === assistantMessageId) {
-				// 		messages[i].content = response;
-				// 		messages[i].status = 'done';
-				// 		break;
-				// 	}
-				// }
+				messageStore.updateMessage(assistantMessageId, {
+					type: MessageUpdateType.FinalAnswer,
+					text: response
+				});
 			},
 			onError: (error: any) => {
-				console.log('error', error);
+				console.error(error);
+				messageStore.updateMessage(assistantMessageId, {
+					type: MessageUpdateType.Error,
+					error: error.message
+				});
 			}
 		});
 

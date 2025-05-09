@@ -1,9 +1,6 @@
 <script lang="ts">
 	import type { Message } from '$lib/types/message';
-	import { MessageType } from '$lib/types/message';
-	import { cn } from '$lib/utils';
 	import { marked } from 'marked';
-	import { Motion } from 'svelte-motion';
 
 	let { message }: { message: Message } = $props();
 </script>

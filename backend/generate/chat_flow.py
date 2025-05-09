@@ -1,11 +1,8 @@
 import functools
 import json
 import os
-from tabnanny import verbose
-from textwrap import dedent
 from typing import Annotated, Dict, Iterator, Optional, Literal, List
 from urllib.parse import urlparse
-import haystack
 from pydantic import BaseModel, Field
 from logging import Logger
 import re
@@ -33,8 +30,6 @@ from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.retrievers import QueryFusionRetriever
-from llama_index.postprocessor.colbert_rerank import ColbertRerank
-from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.agent.workflow import AgentStream
 from llama_index.core.schema import TextNode
 from llama_index.core import set_global_handler
