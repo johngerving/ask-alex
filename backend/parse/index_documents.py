@@ -1,35 +1,19 @@
 from typing import Dict
 import numpy as np
 import os
-import json
 
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.pipeline_options import (
-    AcceleratorDevice,
-    AcceleratorOptions,
-    PdfPipelineOptions,
-)
-from docling.datamodel.base_models import InputFormat
 from docling.chunking import HybridChunker
 
 from llama_index.core import Document
-from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.node_parser import SentenceSplitter
 from llama_index.node_parser.docling import DoclingNodeParser
-from llama_index.core.extractors import TitleExtractor
-from llama_index.core.ingestion import IngestionPipeline, IngestionCache
+from llama_index.core.ingestion import IngestionPipeline
 
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 from urllib.parse import urlparse
 
-from document_cleaner import DocumentCleaner
-
-import psycopg
 import ray.data
-
-import logging
 
 import ray
 

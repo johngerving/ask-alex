@@ -19,6 +19,7 @@ export const messageStore = {
 			for (let i = messages.length - 1; i >= 0; i--) {
 				if (messages[i].id === id) {
 					messages[i].content += update.delta || '';
+					// messages[i].content = messages[i].content.replaceAll(' .', '.');
 					break;
 				}
 			}

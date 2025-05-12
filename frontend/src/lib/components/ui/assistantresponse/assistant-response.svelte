@@ -104,7 +104,7 @@
 				class="absolute left-0 right-0 top-0 flex h-8 w-8 items-center justify-center"
 			>
 				<div
-					class="to-primary mx-auto h-4 w-4 rounded-full bg-gradient-to-br from-green-400 via-emerald-500 shadow-md"
+					class="to-primary mx-auto h-5 w-5 rounded-full bg-gradient-to-br from-green-400 via-emerald-500 shadow-md"
 				></div>
 			</div>
 		{/if}

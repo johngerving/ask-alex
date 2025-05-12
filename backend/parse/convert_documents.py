@@ -24,8 +24,6 @@ class Converter:
         )
         from docling.datamodel.base_models import InputFormat, ConversionStatus
 
-        from docling_haystack.converter import MetaExtractor
-
         # Use the GPU to parse the PDFs
         accelerator_options = AcceleratorOptions(
             num_threads=16, device=AcceleratorDevice.CUDA
@@ -33,8 +31,6 @@ class Converter:
 
         pipeline_options = PdfPipelineOptions()
         pipeline_options.accelerator_options = accelerator_options
-
-        self.meta_extractor = MetaExtractor()
 
         # Create a Docling converter to convert our PDFs
         self.converter = DocumentConverter(
@@ -92,10 +88,7 @@ class Converter:
                 li_doc = LIDocument(
                     doc_id=str(uuid.uuid4()),
                     text=text,
-                    metadata={  # Combine the metadata from the conversion with our own
-                        **metadata,
-                        **self.meta_extractor.extract_dl_doc_meta(dl_doc=dl_doc),
-                    },
+                    metadata=metadata,
                 )
                 # Convert our document to a dictionary to store as text
                 json_doc = json.dumps(li_doc.to_dict())
