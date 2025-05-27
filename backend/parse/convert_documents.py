@@ -5,7 +5,16 @@ import ray.data
 
 from get_metadata import get_metadata
 from docling.datamodel.base_models import InputFormat, ConversionStatus
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import (
+    AcceleratorDevice,
+    AcceleratorOptions,
+    PdfPipelineOptions,
+)
+from docling.datamodel.base_models import InputFormat, ConversionStatus
 from llama_index.core import Document as LIDocument
+
+import json
 import uuid
 
 from typing import Any, Dict
@@ -16,13 +25,6 @@ import os
 
 class Converter:
     def __init__(self):
-        from docling.document_converter import DocumentConverter, PdfFormatOption
-        from docling.datamodel.pipeline_options import (
-            AcceleratorDevice,
-            AcceleratorOptions,
-            PdfPipelineOptions,
-        )
-        from docling.datamodel.base_models import InputFormat, ConversionStatus
 
         # Use the GPU to parse the PDFs
         accelerator_options = AcceleratorOptions(
@@ -42,12 +44,6 @@ class Converter:
         self.logger = logging.getLogger("ray.data")
 
     def __call__(self, input_batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        import json
-
-        import uuid
-
-        from docling.datamodel.base_models import ConversionStatus
-
         print(f'Processing batch of size {len(input_batch["link"])}')
         # Convert all the documents in the input batch - need a User-Agent header to avoid getting blocked
         conversion_results = self.converter.convert_all(

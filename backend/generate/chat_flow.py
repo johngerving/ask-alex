@@ -1,7 +1,7 @@
 import functools
 import json
 import os
-from typing import Annotated, Dict, Iterator, Optional, Literal, List
+from typing import Annotated, Any, Dict, Iterator, Optional, Literal, List
 from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 from logging import Logger
@@ -22,6 +22,7 @@ from llama_index.core.agent.workflow import (
     ToolCallResult,
     AgentStream,
 )
+from llama_index.llms.openai_like import OpenAILike
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.core.agent.workflow import ReActAgent, FunctionAgent
 from llama_index.core.tools import FunctionTool, RetrieverTool
@@ -70,6 +71,10 @@ class WorkflowResponse(BaseModel):
     delta: str
 
 
+class WorkflowReasoning(BaseModel):
+    delta: str
+
+
 class ChatFlow(Workflow):
     """The main workflow for Ask Alex."""
 
@@ -77,9 +82,26 @@ class ChatFlow(Workflow):
         super().__init__(**kwargs)
         self.logger = logger
 
-    llm = GoogleGenAI(model="gemini-2.0-flash")
+    # llm = GoogleGenAI(
+    #     model="gemini-2.0-flash",
+    #     api_key=os.getenv("GOOGLE_API_KEY"),
+    #     is_chat_model=True,
+    #     is_function_calling_model=True,
+    # )
+    llm = OpenAILike(
+        model="cognitivecomputations/Qwen3-235B-A22B-AWQ",
+        api_key=os.getenv("LLM_API_KEY"),
+        api_base=os.getenv("LLM_API_BASE"),
+        is_chat_model=True,
+        is_function_calling_model=True,
+    )
 
-    small_llm = GoogleGenAI(model="gemini-2.0-flash-lite")
+    small_llm = GoogleGenAI(
+        model="gemini-2.0-flash-lite",
+        api_key=os.getenv("GOOGLE_API_KEY"),
+        is_chat_model=True,
+        is_function_calling_model=True,
+    )
 
     pg_conn_str = os.getenv("PG_CONN_STR")
     if not pg_conn_str:
@@ -187,8 +209,8 @@ class ChatFlow(Workflow):
         """Handle the chat route by generating a response using the LLM."""
         self.logger.info("Running step chat")
 
-        message = await ctx.get("message")
-        history = await ctx.get("history")
+        message: ChatMessage = await ctx.get("message")
+        history: List[ChatMessage] = await ctx.get("history")
 
         agent = FunctionAgent(
             llm=self.llm,
@@ -218,11 +240,9 @@ class ChatFlow(Workflow):
         message: ChatMessage = await ctx.get("message")
         history: List[ChatMessage] = await ctx.get("history")
 
+        message = ChatMessage(role="user", content=message.content)
+
         tools = [
-            FunctionTool.from_defaults(
-                fn=self._think,
-                name="think",
-            ),
             self._make_search_tool(ctx),
         ]
 
@@ -274,6 +294,14 @@ class ChatFlow(Workflow):
                 # Send the processed delta (without incomplete citation ends)
                 if delta_to_send:
                     ctx.write_event_to_stream(WorkflowResponse(delta=delta_to_send))
+            if isinstance(ev, AgentStream):
+                raw_delta: Dict[str, Any] = ev.raw["choices"][0]["delta"]
+                if raw_delta.get("reasoning_content") is not None:
+                    # Send reasoning content to user
+                    reasoning_content = raw_delta["reasoning_content"]
+                    ctx.write_event_to_stream(
+                        WorkflowReasoning(delta=reasoning_content)
+                    )
 
         # Process any remaining buffer content
         if buffer:
@@ -282,7 +310,6 @@ class ChatFlow(Workflow):
 
         sources: List[TextNode] = await ctx.get("sources")
         final_formatted_response = generate_citations(sources, full_raw_response)
-        self.logger.info(f"Final response: {final_formatted_response}")
 
         return StopEvent(result=final_formatted_response)
 
@@ -312,7 +339,6 @@ class ChatFlow(Workflow):
                         doc_id=node.node_id[:8],
                         content=node.get_content(metadata_mode=MetadataMode.LLM),
                     )
-                    self.logger.info(node.get_content(metadata_mode=MetadataMode.EMBED))
 
             except Exception as e:
                 self.logger.error(e)

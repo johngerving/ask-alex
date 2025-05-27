@@ -2,6 +2,7 @@ import type { v4 } from 'uuid';
 
 export type Message = {
 	role: 'user' | 'assistant';
+	reasoningContent: string;
 	content: string;
 	id: string;
 	status: MessageStatus;

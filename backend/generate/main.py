@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
-from chat_flow import ChatFlow, WorkflowResponse
+from chat_flow import ChatFlow, WorkflowReasoning, WorkflowResponse
 from llama_index.core.llms import ChatMessage
 from llama_index.core.workflow import (
     Event,
@@ -134,6 +134,11 @@ class ChatQA:
                                 "event": "delta",
                                 "data": self._format_event(ev.delta),
                             }
+                        elif isinstance(ev, WorkflowReasoning):
+                            yield {
+                                "event": "reasoning",
+                                "data": self._format_event(ev.delta),
+                            }
                         else:
                             self.logger.info(f"Event: {ev}")
 
@@ -156,7 +161,6 @@ class ChatQA:
 
     def _format_event(self, event: str) -> str:
         """Format the event as JSON to be sent to the client"""
-        self.logger.info(f"Formatted event: {json.dumps({'v': event})}")
         return json.dumps({"v": event})
 
 

@@ -59,6 +59,9 @@ export const sendMessages = async (
 					} catch (error) {
 						console.error('Error parsing delta:', error);
 					}
+				} else if (eventType === 'reasoning') {
+					const reasoning = parseData(data);
+					fns.onUpdate(reasoning);
 				} else if (eventType === 'response') {
 					const finalResponse = parseData(data);
 					fns.onFinish(finalResponse);
