@@ -32,6 +32,7 @@
 		// Add a message
 		messageStore.createMessage({
 			content: text,
+			reasoning: '',
 			role: 'user',
 			id: userMessageId,
 			status: MessageStatus.Finished
@@ -41,14 +42,21 @@
 			onStart: () => {
 				messageStore.createMessage({
 					content: '',
+					reasoning: '',
 					role: 'assistant',
 					id: assistantMessageId,
 					status: MessageStatus.Started
 				});
 			},
-			onUpdate: (delta: string) => {
+			onUpdateContent: (delta: string) => {
 				messageStore.updateMessage(assistantMessageId, {
 					type: MessageUpdateType.Delta,
+					delta: delta
+				});
+			},
+			onUpdateReasoning: (delta: string) => {
+				messageStore.updateMessage(assistantMessageId, {
+					type: MessageUpdateType.ReasoningDelta,
 					delta: delta
 				});
 			},

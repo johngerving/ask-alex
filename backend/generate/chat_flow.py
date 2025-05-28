@@ -82,19 +82,19 @@ class ChatFlow(Workflow):
         super().__init__(**kwargs)
         self.logger = logger
 
-    # llm = GoogleGenAI(
-    #     model="gemini-2.0-flash",
-    #     api_key=os.getenv("GOOGLE_API_KEY"),
-    #     is_chat_model=True,
-    #     is_function_calling_model=True,
-    # )
-    llm = OpenAILike(
-        model="cognitivecomputations/Qwen3-235B-A22B-AWQ",
-        api_key=os.getenv("LLM_API_KEY"),
-        api_base=os.getenv("LLM_API_BASE"),
+    llm = GoogleGenAI(
+        model="gemini-2.0-flash",
+        api_key=os.getenv("GOOGLE_API_KEY"),
         is_chat_model=True,
         is_function_calling_model=True,
     )
+    # llm = OpenAILike(
+    #     model="cognitivecomputations/Qwen3-235B-A22B-AWQ",
+    #     api_key=os.getenv("LLM_API_KEY"),
+    #     api_base=os.getenv("LLM_API_BASE"),
+    #     is_chat_model=True,
+    #     is_function_calling_model=True,
+    # )
 
     small_llm = GoogleGenAI(
         model="gemini-2.0-flash-lite",
@@ -294,14 +294,6 @@ class ChatFlow(Workflow):
                 # Send the processed delta (without incomplete citation ends)
                 if delta_to_send:
                     ctx.write_event_to_stream(WorkflowResponse(delta=delta_to_send))
-            if isinstance(ev, AgentStream):
-                raw_delta: Dict[str, Any] = ev.raw["choices"][0]["delta"]
-                if raw_delta.get("reasoning_content") is not None:
-                    # Send reasoning content to user
-                    reasoning_content = raw_delta["reasoning_content"]
-                    ctx.write_event_to_stream(
-                        WorkflowReasoning(delta=reasoning_content)
-                    )
 
         # Process any remaining buffer content
         if buffer:

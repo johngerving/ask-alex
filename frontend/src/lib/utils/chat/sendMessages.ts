@@ -6,7 +6,8 @@ export const sendMessages = async (
 	messages: Message[],
 	fns: {
 		onStart: () => void;
-		onUpdate: (delta: string) => void;
+		onUpdateContent: (delta: string) => void;
+		onUpdateReasoning: (delta: string) => void;
 		onFinish: (response: string) => void;
 		onError: (error: any) => void;
 	}
@@ -55,17 +56,25 @@ export const sendMessages = async (
 					try {
 						const delta = parseData(data);
 						response += delta;
-						fns.onUpdate(delta);
+						fns.onUpdateContent(delta);
 					} catch (error) {
 						console.error('Error parsing delta:', error);
 					}
 				} else if (eventType === 'reasoning') {
-					const reasoning = parseData(data);
-					fns.onUpdate(reasoning);
+					try {
+						const reasoningDelta = parseData(data);
+						fns.onUpdateReasoning(reasoningDelta);
+					} catch (error) {
+						console.error('Error parsing reasoning:', error);
+					}
 				} else if (eventType === 'response') {
-					const finalResponse = parseData(data);
-					fns.onFinish(finalResponse);
-					return;
+					try {
+						const finalResponse = parseData(data);
+						fns.onFinish(finalResponse);
+						return;
+					} catch (error) {
+						console.error('Error parsing response:', error);
+					}
 				}
 
 				eventType = '';
@@ -77,13 +86,20 @@ export const sendMessages = async (
 	}
 };
 
-const parseData = (data: string): string => {
+export const parseData = (data: string): string => {
 	let obj = {};
-	obj = JSON.parse(data);
-	if ('v' in obj) {
-		const value = obj.v as string;
-		return value;
+	try {
+		obj = JSON.parse(data);
+	} catch (error: any) {
+		throw new Error(`Invalid JSON string: ${error.message}`);
+	}
+
+	if (typeof obj == 'object' && 'v' in obj) {
+		if (typeof obj.v !== 'string') {
+			throw new Error('"v" property is not a string');
+		}
+		return obj.v;
 	} else {
-		throw new Error('Data missing "v" property');
+		throw new Error('Data missing "v" property or is not a valid object');
 	}
 };
