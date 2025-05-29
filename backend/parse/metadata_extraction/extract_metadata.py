@@ -1,10 +1,6 @@
-import asyncio
-from concurrent.futures import ProcessPoolExecutor
 import json
 import os
-from textwrap import dedent
 from typing import Dict, List
-from numpy import extract
 import psycopg
 from psycopg.types.json import Jsonb
 from dotenv import load_dotenv
@@ -15,7 +11,6 @@ from llama_index.core import Document as LIDocument
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.core.response_synthesizers import TreeSummarize
 from llama_index.core.text_splitter import TokenTextSplitter
-import ray
 
 load_dotenv()
 

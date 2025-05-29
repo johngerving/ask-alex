@@ -16,7 +16,7 @@ from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM
 
 
-async def make_search_tool(ctx: Context) -> FunctionTool:
+async def make_search_knowledge_base_tool(ctx: Context) -> FunctionTool:
     logger: Logger = await ctx.get("logger")
     small_llm: LLM = await ctx.get("small_llm")
 

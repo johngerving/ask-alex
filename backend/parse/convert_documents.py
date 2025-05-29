@@ -105,12 +105,6 @@ def convert_documents():
     if conn_str is None:
         raise Exception("Missing environment variable PG_CONN_STR")
 
-    # Drop the documents table if it exists
-    with psycopg.connect(conn_str) as conn:
-        conn.cursor().execute(
-            "CREATE TABLE IF NOT EXISTS documents (link TEXT, document JSONB)"
-        )
-
     ds = get_metadata()
 
     # Convert PDFs to markdown documents
