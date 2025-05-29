@@ -3,6 +3,7 @@ import json
 import os
 from typing import Annotated, Any, Dict, Iterator, Optional, Literal, List
 from urllib.parse import urlparse
+from llama_cloud import Llm
 from pydantic import BaseModel, Field
 from logging import Logger
 import re
@@ -35,8 +36,10 @@ from llama_index.core.agent.workflow import AgentStream
 from llama_index.core.schema import TextNode
 from llama_index.core import set_global_handler
 from llama_index.core.schema import MetadataMode
+from llama_index.core.llms import LLM
 
 
+from tools.search_knowledge_base import make_search_tool
 from prompts import BASE_PROMPT, RETRIEVAL_AGENT_PROMPT, ROUTER_AGENT_PROMPT
 from utils import generate_citations, remove_citations
 
@@ -46,6 +49,10 @@ class WorkflowStartEvent(StartEvent):
 
     message: ChatMessage
     history: List[ChatMessage]
+
+
+class ChatOrRetrievalRouteEvent(Event):
+    pass
 
 
 class ChatRouteEvent(Event):
@@ -82,95 +89,36 @@ class ChatFlow(Workflow):
         super().__init__(**kwargs)
         self.logger = logger
 
-    llm = GoogleGenAI(
-        model="gemini-2.0-flash",
-        api_key=os.getenv("GOOGLE_API_KEY"),
-        is_chat_model=True,
-        is_function_calling_model=True,
-    )
-    # llm = OpenAILike(
-    #     model="cognitivecomputations/Qwen3-235B-A22B-AWQ",
-    #     api_key=os.getenv("LLM_API_KEY"),
-    #     api_base=os.getenv("LLM_API_BASE"),
-    #     is_chat_model=True,
-    #     is_function_calling_model=True,
-    # )
-
-    small_llm = GoogleGenAI(
-        model="gemini-2.0-flash-lite",
-        api_key=os.getenv("GOOGLE_API_KEY"),
-        is_chat_model=True,
-        is_function_calling_model=True,
-    )
-
-    pg_conn_str = os.getenv("PG_CONN_STR")
-    if not pg_conn_str:
-        raise ValueError("PG_CONN_STR environment variable not set")
-
-    # Get Postgres credentials from connection string
-    pg_url = urlparse(pg_conn_str)
-    host = pg_url.hostname
-    port = pg_url.port
-    database = pg_url.path[1:]
-    user = pg_url.username
-    password = pg_url.password
-
-    # Vector store to store chunks + embeddings in
-    vector_store = PGVectorStore.from_params(
-        host=host,
-        port=port,
-        database=database,
-        user=user,
-        password=password,
-        table_name="llamaindex_docs",
-        schema_name="public",
-        hybrid_search=True,
-        embed_dim=768,
-        hnsw_kwargs={
-            "hnsw_m": 16,
-            "hnsw_ef_construction": 64,
-            "hnsw_ef_search": 40,
-            "hnsw_dist_method": "vector_cosine_ops",
-        },
-    )
-
-    # Index the chunks, using HuggingFace embedding model
-    index = VectorStoreIndex.from_vector_store(
-        vector_store=vector_store,
-        embed_model=HuggingFaceEmbedding(
-            model_name="sentence-transformers/all-mpnet-base-v2"
-        ),
-    )
-
-    # Vector retriever
-    vector_retriever = index.as_retriever(
-        vector_store_query_mode="default",
-        similarity_top_k=50,
-        verbose=True,
-    )
-
-    # Keyword retriever
-    text_retriever = index.as_retriever(
-        vector_store_query_mode="sparse", similarity_top_k=50
-    )
-
-    # Fuse results from both retrievers
-    retriever = QueryFusionRetriever(
-        [vector_retriever, text_retriever],
-        similarity_top_k=10,
-        llm=small_llm,
-        num_queries=3,  # LLM generates extra queries
-        mode="relative_score",
-    )
-
     @step
-    async def route_chat_or_retrieval(
-        self, ctx: Context, ev: StartEvent
-    ) -> ChatRouteEvent | RetrievalRouteEvent:
-        """Route the message to either chat or retrieval based on the message and history."""
-        self.logger.info("Routing chat or retrieval")
+    async def setup(
+        self, ctx: Context, ev: WorkflowStartEvent
+    ) -> ChatOrRetrievalRouteEvent:
+        self.logger.info("Running setup step")
 
-        sllm = self.small_llm.as_structured_llm(output_cls=ChatOrRetrieval)
+        llm = GoogleGenAI(
+            model="gemini-2.0-flash",
+            api_key=os.getenv("GOOGLE_API_KEY"),
+            is_chat_model=True,
+            is_function_calling_model=True,
+        )
+        # llm = OpenAILike(
+        #     model="cognitivecomputations/Qwen3-235B-A22B-AWQ",
+        #     api_key=os.getenv("LLM_API_KEY"),
+        #     api_base=os.getenv("LLM_API_BASE"),
+        #     is_chat_model=True,
+        #     is_function_calling_model=True,
+        # )
+
+        small_llm = GoogleGenAI(
+            model="gemini-2.0-flash-lite",
+            api_key=os.getenv("GOOGLE_API_KEY"),
+            is_chat_model=True,
+            is_function_calling_model=True,
+        )
+
+        await ctx.set("llm", llm)
+        await ctx.set("small_llm", small_llm)
+        await ctx.set("logger", self.logger)
 
         # Only use the last n messages
         n = 3
@@ -187,11 +135,26 @@ class ChatFlow(Workflow):
         sources: List[TextNode] = []
         await ctx.set("sources", sources)
 
+        return ChatOrRetrievalRouteEvent()
+
+    @step
+    async def route_chat_or_retrieval(
+        self, ctx: Context, ev: ChatOrRetrievalRouteEvent
+    ) -> ChatRouteEvent | RetrievalRouteEvent:
+        """Route the message to either chat or retrieval based on the message and history."""
+        self.logger.info("Routing chat or retrieval")
+
+        small_llm: LLM = await ctx.get("small_llm")
+
+        sllm = small_llm.as_structured_llm(output_cls=ChatOrRetrieval)
+
+        message: ChatMessage = await ctx.get("message")
+
         # Call the LLM to determine the route
         json_obj: Dict[str, str] = sllm.chat(
             messages=[
                 ChatMessage(role="system", content=ROUTER_AGENT_PROMPT),
-                ev.message,
+                message,
             ]
         ).raw.dict()
 
@@ -212,8 +175,10 @@ class ChatFlow(Workflow):
         message: ChatMessage = await ctx.get("message")
         history: List[ChatMessage] = await ctx.get("history")
 
+        llm: LLM = await ctx.get("llm")
+
         agent = FunctionAgent(
-            llm=self.llm,
+            llm=llm,
             system_prompt=BASE_PROMPT,
         )
 
@@ -242,13 +207,15 @@ class ChatFlow(Workflow):
 
         message = ChatMessage(role="user", content=message.content)
 
+        llm: LLM = await ctx.get("llm")
+
         tools = [
-            self._make_search_tool(ctx),
+            await make_search_tool(ctx),
         ]
 
         # Create main agent
         agent = FunctionAgent(
-            llm=self.llm,
+            llm=llm,
             system_prompt=RETRIEVAL_AGENT_PROMPT,
             tools=tools,
         )
@@ -304,44 +271,3 @@ class ChatFlow(Workflow):
         final_formatted_response = generate_citations(sources, full_raw_response)
 
         return StopEvent(result=final_formatted_response)
-
-    def _make_search_tool(self, ctx: Context):
-        async def search_knowledge_base(
-            query: Annotated[str, "The query to search the knowledge base for"],
-        ) -> str:
-            """Search the knowledge base for relevant chunks from documents."""
-            self.logger.info(f"Running search_knowledge_base with query: {query}")
-            try:
-                # Use the retriever to get relevant nodes
-                nodes = await self.retriever.aretrieve(query)
-                self.logger.info(f"Retrieved {len(nodes)} nodes")
-
-                # Get sources set in tool
-                sources: List[TextNode] = await ctx.get("sources")
-                sources = sources + nodes
-                await ctx.set("sources", sources)
-
-                content = ""
-
-                for node in nodes:
-                    # Format chunks to be returned to agent
-                    content += (
-                        "<chunk id={doc_id}>\n" "{content}\n" "</chunk>\n"
-                    ).format(
-                        doc_id=node.node_id[:8],
-                        content=node.get_content(metadata_mode=MetadataMode.LLM),
-                    )
-
-            except Exception as e:
-                self.logger.error(e)
-                raise
-
-            return content
-
-        return FunctionTool.from_defaults(
-            async_fn=search_knowledge_base,
-        )
-
-    def _think(self, thought: Annotated[str, "A thought to think about."]):
-        """Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed."""
-        self.logger.info(f"Thought: {thought}")
