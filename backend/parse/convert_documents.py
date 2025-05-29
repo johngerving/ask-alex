@@ -1,5 +1,6 @@
 import logging
 import psycopg
+from psycopg.types.json import Jsonb
 import ray
 import ray.data
 
@@ -87,7 +88,7 @@ class Converter:
                     metadata=metadata,
                 )
                 # Convert our document to a dictionary to store as text
-                json_doc = json.dumps(li_doc.to_dict())
+                json_doc = Jsonb(li_doc.to_dict())
                 documents.append(json_doc)
         return {"link": input_batch["link"], "document": np.array(documents)}
 
@@ -107,7 +108,7 @@ def convert_documents():
     # Drop the documents table if it exists
     with psycopg.connect(conn_str) as conn:
         conn.cursor().execute(
-            "CREATE TABLE IF NOT EXISTS documents (link TEXT, document TEXT)"
+            "CREATE TABLE IF NOT EXISTS documents (link TEXT, document JSONB)"
         )
 
     ds = get_metadata()
