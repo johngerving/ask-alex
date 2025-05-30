@@ -2,6 +2,7 @@ import json
 from logging import Logger
 import os
 import re
+from textwrap import dedent
 from typing import Annotated, List
 from urllib.parse import urlparse
 
@@ -37,20 +38,37 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
     ) -> str:
         """Search the knowledge base for relevant documents. Use this for document-based queries."""
 
-        query = " OR ".join(search_terms)
+        query = " ".join(search_terms)
         logger.info(f"Running search_documents with query: {query}")
         try:
             with psycopg.connect(pg_conn_str) as conn:
                 with conn.cursor() as cur:
                     count = cur.execute(
-                        "SELECT COUNT(*) FROM data_llamaindex_docs l JOIN documents d ON d.id = l.document_id WHERE l.text_search_tsv @@ websearch_to_tsquery(%s)",
+                        """\
+                        SELECT COUNT(DISTINCT d.document)
+                        FROM   data_llamaindex_docs AS l
+                        JOIN   documents            AS d ON d.id = l.document_id
+                        WHERE  l.text_search_tsv @@ plainto_tsquery(%s);
+                        """,
                         (query,),
                     ).fetchone()[0]
                     if count == 0:
                         return "No results found."
 
                     results = cur.execute(
-                        "SELECT DISTINCT d.document, ts_rank(text_search_tsv, websearch_to_tsquery(%s)) AS rank FROM data_llamaindex_docs l JOIN documents d ON d.id = l.document_id WHERE l.text_search_tsv @@ websearch_to_tsquery(%s) ORDER BY rank DESC LIMIT 10 OFFSET %s;",
+                        """\
+                        SELECT *
+                        FROM (
+                            SELECT DISTINCT ON (d.document)
+                                d.document,
+                                ts_rank(l.text_search_tsv, plainto_tsquery(%s)) AS rank
+                            FROM   data_llamaindex_docs AS l
+                            JOIN   documents            AS d ON d.id = l.document_id
+                            WHERE  l.text_search_tsv @@ plainto_tsquery(%s)
+                            ORDER  BY d.document, rank DESC
+                        ) AS t
+                        ORDER BY rank DESC LIMIT 10 OFFSET %s;
+                        """,
                         (query, query, page * 10 - 10),
                     ).fetchall()
 
