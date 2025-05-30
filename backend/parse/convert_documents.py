@@ -63,7 +63,6 @@ class Converter:
         ):
             if result.status == ConversionStatus.FAILURE:
                 print(f"Error processing document at {link} - {result.errors}")
-                documents.append(None)
             else:
                 # Get the document content and create a LlamaIndex document with it
                 dl_doc = result.document
@@ -90,7 +89,14 @@ class Converter:
                 # Convert our document to a dictionary to store as text
                 json_doc = Jsonb(li_doc.to_dict())
                 documents.append(json_doc)
-        return {"link": input_batch["link"], "document": np.array(documents)}
+
+        with psycopg.connect(os.getenv("PG_CONN_STR"), autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO documents (link, document) VALUES (%s, %s) ON CONFLICT (link) DO UPDATE SET document = EXCLUDED.document",
+                    [(link, doc) for link, doc in zip(input_batch["link"], documents)],
+                )
+        return input_batch
 
 
 def convert_documents():
@@ -111,14 +117,11 @@ def convert_documents():
     ds = ds.map_batches(
         Converter,
         concurrency=8,  # Run 8 workers
-        batch_size=64,  # Send batches of 32 links
+        batch_size=128,  # Send batches of 32 links
         num_gpus=1,  # Use 1 GPU per worker
-        num_cpus=2,  # Use 2 CPUs per worker
+        num_cpus=1,  # Use 1 CPUs per worker
     )
-    # Filter out the documents that had errors in them
-    ds = ds.filter(lambda row: row["document"] is not None)
-    # Write dataset to Postgres
-    ds.write_sql(
-        "INSERT INTO documents VALUES(%s, %s)",
-        lambda: psycopg.connect(conn_str),
-    )
+
+    # Loop through the batches to force execution
+    for _ in ds.iter_batches():
+        pass
