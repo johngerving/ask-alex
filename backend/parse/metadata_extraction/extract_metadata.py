@@ -45,13 +45,13 @@ def extract_metadata():
             )
 
             while True:
-                print(f"Processing batch {curr_batch}/{total_batches}")
-
                 # Fetch a batch of documents
                 records = fetch_cur.fetchmany(size=batch_size)
 
                 if not records:
                     break
+
+                print(f"Processing batch {curr_batch}/{total_batches}")
 
                 links: List[str] = [record[0] for record in records]
                 if not isinstance(links, list) or not all(

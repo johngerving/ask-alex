@@ -1,4 +1,4 @@
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
     link TEXT NOT NULL UNIQUE,
     document JSONB NOT NULL
 );
