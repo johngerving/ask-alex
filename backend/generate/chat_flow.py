@@ -39,7 +39,8 @@ from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM
 
 
-from tools.search_knowledge_base import make_search_knowledge_base_tool
+from tools.search_knowledge_base import make_retrieve_chunks_tool
+from tools.search_documents import make_document_search_tool
 from prompts import BASE_PROMPT, RETRIEVAL_AGENT_PROMPT, ROUTER_AGENT_PROMPT
 from utils import generate_citations, remove_citations
 
@@ -210,7 +211,8 @@ class ChatFlow(Workflow):
         llm: LLM = await ctx.get("llm")
 
         tools = [
-            await make_search_knowledge_base_tool(ctx),
+            await make_retrieve_chunks_tool(ctx),
+            await make_document_search_tool(ctx),
         ]
 
         # Create main agent

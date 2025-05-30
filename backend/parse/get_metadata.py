@@ -58,31 +58,10 @@ def dataset_from_digitalcommons() -> ray.data.Dataset:
 
     logger = logging.getLogger("ray")
 
-    # Create a filesystem to store the converted documents in
-    filesys = fs.S3FileSystem(endpoint_override=os.getenv("AWS_ENDPOINT_URL"))
-
     # Get the existing dataset if it exists
-    try:
-        conn_str = os.getenv("PG_CONN_STR")
-        if conn_str is None:
-            raise Exception("Missing environment variable PG_CONN_STR")
-
-        # Read full documents from Postgres database
-        existing_ds = (
-            ray.data.read_sql(
-                "SELECT * FROM documents", lambda: psycopg.connect(conn_str)
-            )
-            .select_columns(["link"])
-            .to_random_access_dataset(key="link")
-        )
-
-        # Sort the dataset by link for fast lookup
-        ds_exists = True
-        logger.info(f"Dataset found.")
-    except Exception as e:
-        logger.error(e)
-        ds_exists = False
-        logger.info(f"Dataset not found.")
+    conn_str = os.getenv("PG_CONN_STR")
+    if conn_str is None:
+        raise Exception("Missing environment variable PG_CONN_STR")
 
     # Initialize HTTP session
     session = requests.Session()
@@ -137,29 +116,29 @@ def dataset_from_digitalcommons() -> ray.data.Dataset:
                     "Document result does not contain 'download_link' field"
                 )
 
-            # If the dataset already exists, search it see if the link already exists
-            if ds_exists:
-                # Add the item if it doesn't already exist in the dataset
-                link = ray.get(existing_ds.get_async(result["download_link"]))
-                print(link)
-                if link is None:
-                    logger.info(
-                        f"Document {result['download_link']} not found in dataset. Adding to the new dataset."
+            # Add the item if it doesn't already exist in the dataset
+            with psycopg.connect(conn_str) as conn:
+                with conn.cursor() as cur:
+                    # Check if row already exists in the dataset
+                    cur.execute(
+                        "SELECT link FROM documents WHERE link = %s",
+                        (result["download_link"],),
                     )
-                    ds_items.append(
-                        {
-                            "link": result["download_link"],
-                            "metadata": json.dumps(result),
-                        }
-                    )
-                else:
-                    logger.info(
-                        f"Document {result['download_link']} found in dataset. Ignoring."
-                    )
-            else:
-                # Add the item anyway if the dataset doesn't exist already
+                    records = cur.fetchone()
+
+            if records is None:
+                logger.info(
+                    f"Document {result['download_link']} not found in dataset. Adding to the new dataset."
+                )
                 ds_items.append(
-                    {"link": result["download_link"], "metadata": json.dumps(result)}
+                    {
+                        "link": result["download_link"],
+                        "metadata": json.dumps(result),
+                    }
+                )
+            else:
+                logger.info(
+                    f"Document {result['download_link']} found in dataset. Ignoring."
                 )
 
         start += LIMIT

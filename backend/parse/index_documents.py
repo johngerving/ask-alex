@@ -1,6 +1,7 @@
 from typing import Dict
 import numpy as np
 import os
+from urllib.parse import urlparse
 
 from docling.chunking import HybridChunker
 
@@ -11,10 +12,9 @@ from llama_index.core.ingestion import IngestionPipeline
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-from urllib.parse import urlparse
+import psycopg
 
 import ray.data
-
 import ray
 
 
@@ -91,6 +91,7 @@ class DocumentIndexer:
                 "download_link",
                 "publication_date",
                 "dl_meta",
+                "summary",
             ]
 
             # Filter discipline list
@@ -125,10 +126,6 @@ def index_documents():
     """
     Indexes a ray.data.Dataset containing links to PDFs stored in S3.
     """
-
-    from pyarrow import fs
-    import psycopg
-
     conn_str = os.getenv("PG_CONN_STR")
     if conn_str is None:
         raise Exception("Missing environment variable PG_CONN_STR")
@@ -141,9 +138,12 @@ def index_documents():
     ds = ray.data.read_sql("SELECT * FROM documents", lambda: psycopg.connect(conn_str))
 
     # Run the indexing pipeline in parallel in batches
-    ds.map_batches(
+    ds = ds.map_batches(
         DocumentIndexer,
         batch_size=32,
         num_gpus=1,  # 1 GPU per worker
-        concurrency=7,  # 8 workers
-    ).materialize()
+        concurrency=8,  # 8 workers
+    )
+
+    for _ in ds.iter_batches(batch_size=None):
+        pass

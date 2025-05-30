@@ -1,5 +1,7 @@
+import json
 from logging import Logger
 import os
+import re
 from typing import Annotated, List
 from urllib.parse import urlparse
 
@@ -14,6 +16,8 @@ from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.schema import TextNode
 from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM
+from llama_index.core.schema import Document
+import psycopg
 
 # SELECT DISTINCT elem FROM documents CROSS JOIN LATERAL jsonb_array_elements_text(document->'metadata'->'discipline') AS t(elem) WHERE jsonb_typeof(document->'metadata'->'discipline') = 'array';
 
@@ -26,12 +30,57 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
         raise ValueError("PG_CONN_STR environment variable not set")
 
     async def search_documents(
-        query: Annotated[str, "The query to search the knowledge base for"],
+        search_terms: Annotated[
+            List[str], "A list of key words or terms to search for"
+        ],
+        page: Annotated[int, "The page number for pagination, starting from 1"] = 1,
     ) -> str:
-        """Search the knowledge base for relevant documents."""
+        """Search the knowledge base for relevant documents. Use this for document-based queries."""
+
+        query = " OR ".join(search_terms)
         logger.info(f"Running search_documents with query: {query}")
         try:
-            pass
+            with psycopg.connect(pg_conn_str) as conn:
+                with conn.cursor() as cur:
+                    count = cur.execute(
+                        "SELECT COUNT(*) FROM data_llamaindex_docs l JOIN documents d ON d.id = l.document_id WHERE l.text_search_tsv @@ websearch_to_tsquery(%s)",
+                        (query,),
+                    ).fetchone()[0]
+                    if count == 0:
+                        return "No results found."
+
+                    results = cur.execute(
+                        "SELECT DISTINCT d.document, ts_rank(text_search_tsv, websearch_to_tsquery(%s)) AS rank FROM data_llamaindex_docs l JOIN documents d ON d.id = l.document_id WHERE l.text_search_tsv @@ websearch_to_tsquery(%s) ORDER BY rank DESC LIMIT 10 OFFSET %s;",
+                        (query, query, page * 10 - 10),
+                    ).fetchall()
+
+            logger.info(f"Found {len(results)} results for query: {query}")
+            docs = [Document.from_dict(obj[0]) for obj in results]
+
+            display_object = {
+                "total_results": count,
+                "page": page,
+            }
+
+            logger.info(f"Display object: {display_object}")
+
+            display_docs = []
+
+            for doc in docs:
+                display_docs.append(
+                    {
+                        "title": doc.metadata.get("title", "Untitled document"),
+                        "summary": doc.metadata.get("summary", None),
+                    }
+                )
+
+            logger.info(f"Display documents: {display_docs}")
+
+            display_object["results"] = display_docs
+
+            logger.info(f"Final display object: {display_object}")
+            return json.dumps(display_object, indent=2)
+
         except Exception as e:
             logger.error(e)
             raise

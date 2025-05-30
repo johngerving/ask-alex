@@ -16,7 +16,7 @@ from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM
 
 
-async def make_search_knowledge_base_tool(ctx: Context) -> FunctionTool:
+async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
     logger: Logger = await ctx.get("logger")
     small_llm: LLM = await ctx.get("small_llm")
 
@@ -80,10 +80,10 @@ async def make_search_knowledge_base_tool(ctx: Context) -> FunctionTool:
         mode="relative_score",
     )
 
-    async def search_knowledge_base(
-        query: Annotated[str, "The query to search the knowledge base for"],
+    async def retrieve_chunks(
+        query: Annotated[str, "The query to retrieve relevant chunks"],
     ) -> str:
-        """Search the knowledge base for relevant chunks from documents."""
+        """Search the knowledge base for relevant chunks from documents. Use this for general knowledge-based queries."""
         logger.info(f"Running search_knowledge_base with query: {query}")
         try:
             # Use the retriever to get relevant nodes
@@ -111,5 +111,5 @@ async def make_search_knowledge_base_tool(ctx: Context) -> FunctionTool:
         return content
 
     return FunctionTool.from_defaults(
-        async_fn=search_knowledge_base,
+        async_fn=retrieve_chunks,
     )

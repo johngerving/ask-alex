@@ -123,5 +123,5 @@ def convert_documents():
     )
 
     # Loop through the batches to force execution
-    for _ in ds.iter_batches():
+    for _ in ds.iter_batches(batch_size=None):
         pass
