@@ -74,8 +74,17 @@ class DocumentIndexer:
         """
         import json
 
+        with psycopg.connect(os.getenv("PG_CONN_STR")) as conn:
+            with conn.cursor() as cur:
+                # Get the documents from the database
+                cur.execute(
+                    "SELECT document FROM documents WHERE id = ANY(%s)",
+                    (batch["id"].tolist(),),
+                )
+                rows = cur.fetchall()
+
         # Get the text stored in each document, convert it to a dictionary, and convert each of those into a LlamaIndex Document
-        documents = [Document.from_dict(json.loads(doc)) for doc in batch["document"]]
+        documents = [Document.from_dict(row[0]) for row in rows]
 
         for document in documents:
             # Exclude some metadata keys from being shown to the LLM and passed to the embedder so as to preserve the chunk size
@@ -112,12 +121,15 @@ class DocumentIndexer:
                 document.metadata["author"] = author
 
         self.logger.info(f"Processing batch of size {len(documents)}")
-        try:
-            self.pipeline.run(documents=documents)
-        except Exception as e:
-            self.logger.error(e)
-            self.logger.info([document.metadata for document in documents])
-            raise
+        for document in documents:
+            document.set_content(document.text.replace("\x00", ""))
+            document.set_content(document.text.replace("\\u0000", ""))
+            try:
+                self.pipeline.run(documents=[document])
+            except ValueError as e:
+                self.logger.info(document)
+                self.logger.error(e)
+                raise
 
         return batch
 
@@ -132,10 +144,13 @@ def index_documents():
 
     # Drop the documents table if it exists
     with psycopg.connect(conn_str) as conn:
-        conn.cursor().execute("DROP TABLE IF EXISTS data_llamaindex_docs")
+        conn.cursor().execute("TRUNCATE TABLE data_llamaindex_docs")
 
     # Read full documents from Postgres database
-    ds = ray.data.read_sql("SELECT * FROM documents", lambda: psycopg.connect(conn_str))
+    ds = ray.data.read_sql(
+        "SELECT id FROM documents",
+        lambda: psycopg.connect(conn_str),
+    )
 
     # Run the indexing pipeline in parallel in batches
     ds = ds.map_batches(

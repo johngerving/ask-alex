@@ -83,8 +83,14 @@ async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
     async def retrieve_chunks(
         query: Annotated[str, "The query to retrieve relevant chunks"],
     ) -> str:
-        """Search the knowledge base for relevant chunks from documents. Use this for general knowledge-based queries."""
-        logger.info(f"Running search_knowledge_base with query: {query}")
+        """Search the knowledge base for relevant chunks from documents. Best used for questions that are more pointed in nature or about particular topics. Do NOT use if the question asks seems to require a general summary of any given document. Use the search_documents tool instead for that purpose.
+
+        "Example user messages to use this tool for:
+        - "What is ...?"
+        - "Tell me about the history of ..."
+        - "Write a report on ..."
+        """
+        logger.info(f"Running retrieve_chunks with query: {query}")
         try:
             # Use the retriever to get relevant nodes
             nodes = await retriever.aretrieve(query)

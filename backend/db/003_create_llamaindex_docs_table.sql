@@ -1,12 +1,14 @@
+CREATE EXTENSION vector;
+
 CREATE TABLE IF NOT EXISTS data_llamaindex_docs (
     id BIGSERIAL PRIMARY KEY,
     text VARCHAR NOT NULL,
     metadata_ JSON,
     node_id VARCHAR,
-    embedding Vector(768),
+    embedding vector(768),
     text_search_tsv tsvector GENERATED ALWAYS AS (
         to_tsvector('english', text)
-    ) STORED,
+    ) STORED
 );
 
 CREATE INDEX IF NOT EXISTS data_llamaindex_docs_embedding_idx ON data_llamaindex_docs USING hnsw ( embedding vector_cosine_ops ) WITH (m='16', ef_construction='64' );

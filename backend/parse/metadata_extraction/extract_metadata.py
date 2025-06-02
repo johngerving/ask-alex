@@ -138,6 +138,3 @@ def summarize_batch(batch: List[Dict[any, any]]) -> List[str]:
     summaries = [summarize_document(doc) for doc in batch]
 
     return summaries
-
-
-extract_metadata()

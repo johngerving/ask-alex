@@ -1,7 +1,7 @@
 import ray
 
-from convert_documents import convert_documents
-from index_documents import index_documents
+# from convert_documents import convert_documents
+# from index_documents import index_documents
 from metadata_extraction.extract_metadata import extract_metadata
 
 ray.init()
@@ -16,4 +16,4 @@ extract_metadata()
 
 ####### Indexing #######
 
-index_documents()
+# index_documents()

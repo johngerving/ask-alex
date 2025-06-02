@@ -36,7 +36,12 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
         ],
         page: Annotated[int, "The page number for pagination, starting from 1"] = 1,
     ) -> str:
-        """Search the knowledge base for relevant documents. Use this for document-based queries."""
+        """Search the knowledge base for relevant documents. Best used for information about documents themselves and summaries of specific documents. Do NOT use if answer can be found in a specific chunk of a given document. Use the retrieve_chunks tool instead for that purpose.
+
+        Example user messages to use this tool for:
+        - "What documents talk about ...?"
+        - "Summarize documents about ..."
+        """
 
         query = " ".join(search_terms)
         logger.info(f"Running search_documents with query: {query}")

@@ -22,10 +22,6 @@ RETRIEVAL_AGENT_PROMPT = (
     + """
 Formulate an answer to user queries. Use markdown to format your responses and make them more readable. Use headings, lists, and other formatting to make your responses easy to read. If there are multiple sections in your response, you MUST use headings to separate them. Do not use bold text to denote different sections.
 
-Use the following tools to help you answer queries:
-- `search_knowledge_base(query)`: Search the knowledge base for relevant document chunks. Use this for general knowledge-based queries.
-- `search_documents(search_terms, page)`: Search the knowledge base for relevant documents. Use this for document-based queries. You can use this to get high-level overviews of several documents.
-
 You may use multiple tools as many times as you need until you have sufficient information. Use the retrieved information to write a comprehensive answer to the query, discarding irrelevant documents. Provide inline citations of each document you use.
 
 Finally, here are a set of rules that you MUST follow:
