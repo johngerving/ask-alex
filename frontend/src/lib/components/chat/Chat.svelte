@@ -7,7 +7,7 @@
 
 <Card.Root class="flex h-full w-full flex-col items-center">
 	<Card.Header class="h-11 w-full">
-		<Card.Title>Ask Alex</Card.Title>
+		<Card.Title>Ask Alex Humboldt</Card.Title>
 	</Card.Header>
 	<div class="flex min-h-0 w-full max-w-4xl flex-grow flex-col gap-2 p-4">
 		<Card.Content class="min-h-0 w-full flex-grow p-0">
