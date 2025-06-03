@@ -25,7 +25,15 @@ def create_tasks(ds_items: List[DatasetItem]):
             cur.executemany(
                 "INSERT INTO tasks (payload) VALUES (%s)",
                 [
-                    (Jsonb({"link": item.link, "metadata": item.metadata}),)
+                    (
+                        Jsonb(
+                            {
+                                "task_type": "conversion",
+                                "link": item.link,
+                                "metadata": item.metadata,
+                            }
+                        ),
+                    )
                     for item in ds_items
                 ],
             )
