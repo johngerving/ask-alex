@@ -72,19 +72,9 @@ class DocumentIndexer:
         Args:
             batch: A dictionary with a column for links to PDFs.
         """
-        import json
-
-        with psycopg.connect(os.getenv("PG_CONN_STR")) as conn:
-            with conn.cursor() as cur:
-                # Get the documents from the database
-                cur.execute(
-                    "SELECT document FROM documents WHERE id = ANY(%s)",
-                    (batch["id"].tolist(),),
-                )
-                rows = cur.fetchall()
 
         # Get the text stored in each document, convert it to a dictionary, and convert each of those into a LlamaIndex Document
-        documents = [Document.from_dict(row[0]) for row in rows]
+        documents = [Document.from_dict(doc) for doc in batch["document"]]
 
         for document in documents:
             # Exclude some metadata keys from being shown to the LLM and passed to the embedder so as to preserve the chunk size
@@ -93,6 +83,7 @@ class DocumentIndexer:
                 "url",
                 "download_link",
                 "dl_meta",
+                "summary",
             ]
             document.excluded_embed_metadata_keys = [
                 "abstract",
@@ -131,7 +122,7 @@ class DocumentIndexer:
                 self.logger.error(e)
                 raise
 
-        return batch
+        return {}
 
 
 def index_documents():
@@ -148,7 +139,7 @@ def index_documents():
 
     # Read full documents from Postgres database
     ds = ray.data.read_sql(
-        "SELECT id FROM documents",
+        "SELECT document FROM documents",
         lambda: psycopg.connect(conn_str),
     )
 
@@ -156,9 +147,7 @@ def index_documents():
     ds = ds.map_batches(
         DocumentIndexer,
         batch_size=32,
+        num_cpus=1,
         num_gpus=1,  # 1 GPU per worker
         concurrency=8,  # 8 workers
-    )
-
-    for _ in ds.iter_batches(batch_size=None):
-        pass
+    ).count()
