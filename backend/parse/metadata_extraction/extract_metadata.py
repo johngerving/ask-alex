@@ -111,7 +111,7 @@ def summarize_document(document_obj: Dict[any, any]) -> str:
         max_tokens=1000,
     )
 
-    query_str = "Summarize this text in a few sentences, capturing the main points and core meaning of the text. Be concise and clear in your summary."
+    query_str = "Summarize the chunks listed above in a few sentences, capturing the main points and core meaning of the text. Be concise and clear in your summary."
 
     # Split the content into manageable chunks
     chunks = splitter.split_text(content)
@@ -121,13 +121,8 @@ def summarize_document(document_obj: Dict[any, any]) -> str:
         llm=llm,
     )
 
-    try:
-        # Summarize the document content
-        summary = summarizer.get_response(query_str, chunks)
-    except Exception as e:
-        print(f"Error summarizing document: {e}")
-        print("Document content:", chunks)
-        raise
+    # Summarize the document content
+    summary = summarizer.get_response(query_str, chunks)
 
     return summary
 

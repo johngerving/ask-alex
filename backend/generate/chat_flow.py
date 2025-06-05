@@ -1,5 +1,6 @@
 import functools
 import json
+from operator import is_
 import os
 from typing import Annotated, Any, Dict, Iterator, Optional, Literal, List
 from urllib.parse import urlparse
@@ -25,6 +26,7 @@ from llama_index.core.agent.workflow import (
 )
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.llms.google_genai import GoogleGenAI
+from llama_index.llms.openrouter import OpenRouter
 from llama_index.core.agent.workflow import ReActAgent, FunctionAgent
 from llama_index.core.tools import FunctionTool, RetrieverTool
 from llama_index.core.llms import ChatMessage
@@ -96,23 +98,19 @@ class ChatFlow(Workflow):
     ) -> ChatOrRetrievalRouteEvent:
         self.logger.info("Running setup step")
 
-        llm = GoogleGenAI(
-            model="gemini-2.0-flash",
-            api_key=os.getenv("GOOGLE_API_KEY"),
+        llm = OpenRouter(
+            model="deepseek/deepseek-chat-v3-0324",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            context_window=41000,
+            max_tokens=4000,
             is_chat_model=True,
             is_function_calling_model=True,
         )
-        # llm = OpenAILike(
-        #     model="cognitivecomputations/Qwen3-235B-A22B-AWQ",
-        #     api_key=os.getenv("LLM_API_KEY"),
-        #     api_base=os.getenv("LLM_API_BASE"),
-        #     is_chat_model=True,
-        #     is_function_calling_model=True,
-        # )
-
-        small_llm = GoogleGenAI(
-            model="gemini-2.0-flash-lite",
-            api_key=os.getenv("GOOGLE_API_KEY"),
+        small_llm = OpenRouter(
+            model="qwen/qwen3-30b-a3b",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            context_window=41000,
+            max_tokens=4000,
             is_chat_model=True,
             is_function_calling_model=True,
         )
@@ -151,6 +149,11 @@ class ChatFlow(Workflow):
 
         message: ChatMessage = await ctx.get("message")
 
+        message = ChatMessage(
+            role="user",
+            content=message.content + " /no_think",
+        )
+
         # Call the LLM to determine the route
         json_obj: Dict[str, str] = sllm.chat(
             messages=[
@@ -176,10 +179,12 @@ class ChatFlow(Workflow):
         message: ChatMessage = await ctx.get("message")
         history: List[ChatMessage] = await ctx.get("history")
 
-        llm: LLM = await ctx.get("llm")
+        message.content = message.content + " /no_think"
+
+        small_llm: LLM = await ctx.get("small_llm")
 
         agent = FunctionAgent(
-            llm=llm,
+            llm=small_llm,
             system_prompt=BASE_PROMPT,
         )
 

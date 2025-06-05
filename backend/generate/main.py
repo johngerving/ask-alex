@@ -34,8 +34,10 @@ from llama_index.core.agent.workflow import (
 )
 from langfuse.llama_index import LlamaIndexInstrumentor
 
-# from dotenv import load_dotenv
-# load_dotenv()
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 app = FastAPI()
 
@@ -70,98 +72,93 @@ class RAGResponse(BaseModel):
     response: str = ""
 
 
-@serve.deployment
-@serve.ingress(app)
-class ChatQA:
-    def __init__(self):
-        self.logger = logging.getLogger("ray.serve")
-        self.workflow = ChatFlow(logger=self.logger, timeout=120, verbose=True)
-        self.instrumentor = LlamaIndexInstrumentor(
-            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-            host=os.getenv("LANGFUSE_HOST"),
-        )
+logger = logging.getLogger("ray.serve")
+workflow = ChatFlow(logger=logger, timeout=120, verbose=True)
+instrumentor = LlamaIndexInstrumentor(
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    host=os.getenv("LANGFUSE_HOST"),
+)
 
-    @app.post("/")
-    async def run(self, request: Request) -> EventSourceResponse:
-        body = RAGBody(**await request.json())
 
-        # Run the pipeline with the user's query
-        messages: List[ChatMessage] = []
+@app.post("/")
+async def run(request: Request) -> EventSourceResponse:
+    body = RAGBody(**await request.json())
 
-        # Convert the request body to a list of LlamaIndex messages
-        if len(body.messages) == 0:
-            raise HTTPException(status_code=400, detail="Empty field 'messages'")
-        for el in body.messages:
-            if el.role == "assistant":
-                messages.append(
-                    ChatMessage(
-                        role="assistant",
-                        content=el.content,
-                    )
+    # Run the pipeline with the user's query
+    messages: List[ChatMessage] = []
+
+    # Convert the request body to a list of LlamaIndex messages
+    if len(body.messages) == 0:
+        raise HTTPException(status_code=400, detail="Empty field 'messages'")
+    for el in body.messages:
+        if el.role == "assistant":
+            messages.append(
+                ChatMessage(
+                    role="assistant",
+                    content=el.content,
                 )
-            elif el.role == "user":
-                messages.append(
-                    ChatMessage(
-                        role="user",
-                        content=el.content,
-                    )
+            )
+        elif el.role == "user":
+            messages.append(
+                ChatMessage(
+                    role="user",
+                    content=el.content,
                 )
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Message role must be either 'assistant' or 'user'. Got {el.role}",
-                )
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message role must be either 'assistant' or 'user'. Got {el.role}",
+            )
 
-        history = messages[:-1]
-        message = messages[-1]
+    history = messages[:-1]
+    message = messages[-1]
 
-        async def event_generator():
-            try:
-                with self.instrumentor.observe():
-                    self.logger.info(f"Running workflow")
-                    handler = self.workflow.run(message=message, history=history)
+    async def event_generator():
+        try:
+            with instrumentor.observe():
+                logger.info(f"Running workflow")
+                handler = workflow.run(message=message, history=history)
 
-                    # Read events from the workflow run
-                    async for ev in handler.stream_events():
-                        if await request.is_disconnected():
-                            self.logger.info("Disconnected")
-                            break
+                # Read events from the workflow run
+                async for ev in handler.stream_events():
+                    if await request.is_disconnected():
+                        logger.info("Disconnected")
+                        break
 
-                        # Stream events to the client
-                        if isinstance(ev, WorkflowResponse):
-                            yield {
-                                "event": "delta",
-                                "data": self._format_event(ev.delta),
-                            }
-                        elif isinstance(ev, WorkflowReasoning):
-                            yield {
-                                "event": "reasoning",
-                                "data": self._format_event(ev.delta),
-                            }
-                        else:
-                            self.logger.info(f"Event: {ev}")
+                    # Stream events to the client
+                    if isinstance(ev, WorkflowResponse):
+                        yield {
+                            "event": "delta",
+                            "data": _format_event(ev.delta),
+                        }
+                    elif isinstance(ev, WorkflowReasoning):
+                        yield {
+                            "event": "reasoning",
+                            "data": _format_event(ev.delta),
+                        }
+                    else:
+                        logger.info(f"Event: {ev}")
 
-                    self.logger.info(f"Got to end of event stream")
+                logger.info(f"Got to end of event stream")
 
-                    # Get the final response from the workflow
-                    result = await handler
-                    self.logger.info(f"Result: {result}")
+                # Get the final response from the workflow
+                result = await handler
+                logger.info(f"Result: {result}")
 
-                    # Stream the final response to the client
-                    yield {"event": "response", "data": self._format_event(str(result))}
+                # Stream the final response to the client
+                yield {"event": "response", "data": _format_event(str(result))}
 
-                self.instrumentor.flush()
+            instrumentor.flush()
 
-            except Exception as e:
-                self.logger.info(f"Exception: {e}")
+        except Exception as e:
+            logger.info(f"Exception: {e}")
 
-        # Start event stream
-        return EventSourceResponse(event_generator())
-
-    def _format_event(self, event: str) -> str:
-        """Format the event as JSON to be sent to the client"""
-        return json.dumps({"v": event})
+    # Start event stream
+    return EventSourceResponse(event_generator())
 
 
-deployment = ChatQA.bind()
+def _format_event(event: str) -> str:
+    """Format the event as JSON to be sent to the client"""
+    return json.dumps({"v": event})
