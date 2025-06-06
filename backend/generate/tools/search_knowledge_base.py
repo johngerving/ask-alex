@@ -14,11 +14,18 @@ from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.schema import TextNode
 from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM
+from llama_index.llms.openrouter import OpenRouter
 
 
 async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
-    logger: Logger = await ctx.get("logger")
-    small_llm: LLM = await ctx.get("small_llm")
+    small_llm = OpenRouter(
+        model="mistralai/mistral-small-24b-instruct-2501",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        context_window=41000,
+        max_tokens=4000,
+        is_chat_model=True,
+        is_function_calling_model=True,
+    )
 
     pg_conn_str = os.getenv("PG_CONN_STR")
     if not pg_conn_str:
@@ -90,11 +97,9 @@ async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
         - "Tell me about the history of ..."
         - "Write a report on ..."
         """
-        logger.info(f"Running retrieve_chunks with query: {query}")
         try:
             # Use the retriever to get relevant nodes
             nodes = await retriever.aretrieve(query)
-            logger.info(f"Retrieved {len(nodes)} nodes")
 
             # Get sources set in tool
             sources: List[TextNode] = await ctx.get("sources")
@@ -111,7 +116,6 @@ async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
                 )
 
         except Exception as e:
-            logger.error(e)
             raise
 
         return content

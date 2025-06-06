@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
+from reflection_agent import ReflectionAgent
 from chat_flow import ChatFlow, WorkflowReasoning, WorkflowResponse
 from llama_index.core.llms import ChatMessage
 from llama_index.core.workflow import (
@@ -32,7 +33,9 @@ from llama_index.core.agent.workflow import (
     ToolCallResult,
     AgentStream,
 )
-from langfuse.llama_index import LlamaIndexInstrumentor
+from llama_index.llms.openrouter import OpenRouter
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+from langfuse import get_client
 
 from dotenv import load_dotenv
 
@@ -73,12 +76,17 @@ class RAGResponse(BaseModel):
 
 
 logger = logging.getLogger("ray.serve")
-workflow = ChatFlow(logger=logger, timeout=120, verbose=True)
-instrumentor = LlamaIndexInstrumentor(
-    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-    host=os.getenv("LANGFUSE_HOST"),
+# workflow = ChatFlow(logger=logger, timeout=120, verbose=True)
+
+llm = OpenRouter(
+    model="deepseek/deepseek-chat-v3-0324",
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    context_window=41000,
+    max_tokens=4000,
+    is_chat_model=True,
+    is_function_calling_model=True,
 )
+workflow = ReflectionAgent(llm=llm, timeout=120, verbose=True)
 
 
 @app.post("/")
@@ -117,7 +125,8 @@ async def run(request: Request) -> EventSourceResponse:
 
     async def event_generator():
         try:
-            with instrumentor.observe():
+            langfuse = get_client()
+            with langfuse.start_as_current_span(name="ask_alex_agent_trace"):
                 logger.info(f"Running workflow")
                 handler = workflow.run(message=message, history=history)
 
@@ -149,8 +158,6 @@ async def run(request: Request) -> EventSourceResponse:
 
                 # Stream the final response to the client
                 yield {"event": "response", "data": _format_event(str(result))}
-
-            instrumentor.flush()
 
         except Exception as e:
             logger.info(f"Exception: {e}")

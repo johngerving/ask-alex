@@ -4,6 +4,11 @@ from llama_index.llms.openai import OpenAI
 from reflection_agent import ReflectionAgent
 from llama_index.llms.openrouter import OpenRouter
 import os
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+from langfuse import get_client
+
+# Initialize LlamaIndex instrumentation
+LlamaIndexInstrumentor().instrument()
 
 from dotenv import load_dotenv
 
@@ -48,11 +53,12 @@ agent = ReflectionAgent(
 
 
 async def main():
-    ret = await agent.run(
-        input="What is the sum of 1924 and 298093? Also, when was the Redwood National Park established?"
-    )
+    langfuse = get_client()
+    with langfuse.start_as_current_span(name="reflection_agent_trace"):
+        ret = await agent.run(input="Write a report on microglia.")
 
     print(ret)
+    langfuse.flush()
 
 
 asyncio.run(main())

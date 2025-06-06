@@ -24,8 +24,6 @@ import psycopg
 
 
 async def make_document_search_tool(ctx: Context) -> FunctionTool:
-    logger: Logger = await ctx.get("logger")
-
     pg_conn_str = os.getenv("PG_CONN_STR")
     if not pg_conn_str:
         raise ValueError("PG_CONN_STR environment variable not set")
@@ -44,7 +42,6 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
         """
 
         query = " ".join(search_terms)
-        logger.info(f"Running search_documents with query: {query}")
         try:
             with psycopg.connect(pg_conn_str) as conn:
                 with conn.cursor() as cur:
@@ -77,15 +74,12 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
                         (query, query, page * 10 - 10),
                     ).fetchall()
 
-            logger.info(f"Found {len(results)} results for query: {query}")
             docs = [Document.from_dict(obj[0]) for obj in results]
 
             display_object = {
                 "total_results": count,
                 "page": page,
             }
-
-            logger.info(f"Display object: {display_object}")
 
             display_docs = []
 
@@ -97,15 +91,11 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
                     }
                 )
 
-            logger.info(f"Display documents: {display_docs}")
-
             display_object["results"] = display_docs
 
-            logger.info(f"Final display object: {display_object}")
             return json.dumps(display_object, indent=2)
 
         except Exception as e:
-            logger.error(e)
             raise
 
     return FunctionTool.from_defaults(
