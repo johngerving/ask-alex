@@ -19,7 +19,7 @@ from llama_index.llms.openrouter import OpenRouter
 
 async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
     small_llm = OpenRouter(
-        model="mistralai/mistral-small-24b-instruct-2501",
+        model="meta-llama/llama-4-scout",
         api_key=os.getenv("OPENROUTER_API_KEY"),
         context_window=41000,
         max_tokens=4000,
@@ -90,7 +90,9 @@ async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
     async def retrieve_chunks(
         query: Annotated[str, "The query to retrieve relevant chunks"],
     ) -> str:
-        """Search the knowledge base for relevant chunks from documents. Best used for questions that are more pointed in nature or about particular topics. Do NOT use if the question asks seems to require a general summary of any given document. Use the search_documents tool instead for that purpose.
+        """Search the knowledge base for relevant chunks from documents. Best used for questions about particular topics, concepts, events, entities, etc. Do NOT use if the question asks seems to require a summary of any given document or set of documents. Use the search_documents tool instead for that purpose.
+
+        When using this tool, separate distinct queries/questions into separate tool calls, rather than combining multiple questions into one single tool call. This will allow for more diverse information to be retrieved.
 
         "Example user messages to use this tool for:
         - "What is ...?"
@@ -102,9 +104,9 @@ async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
             nodes = await retriever.aretrieve(query)
 
             # Get sources set in tool
-            sources: List[TextNode] = await ctx.get("sources")
+            sources: List[TextNode] = await ctx.get("retrieved_nodes", [])
             sources = sources + nodes
-            await ctx.set("sources", sources)
+            await ctx.set("retrieved_nodes", sources)
 
             content = ""
 

@@ -5,6 +5,7 @@ from typing import Generator, List
 from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
+from openai import timeout
 from ray import serve
 import requests
 from fastapi import FastAPI, HTTPException, Request
@@ -14,8 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
-from reflection_agent import ReflectionAgent
-from chat_flow import ChatFlow, WorkflowReasoning, WorkflowResponse
+from agent.retrieval_workflow import StreamEvent
+from agent.agent import Agent
 from llama_index.core.llms import ChatMessage
 from llama_index.core.workflow import (
     Event,
@@ -77,16 +78,7 @@ class RAGResponse(BaseModel):
 
 logger = logging.getLogger("ray.serve")
 # workflow = ChatFlow(logger=logger, timeout=120, verbose=True)
-
-llm = OpenRouter(
-    model="deepseek/deepseek-chat-v3-0324",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    context_window=41000,
-    max_tokens=4000,
-    is_chat_model=True,
-    is_function_calling_model=True,
-)
-workflow = ReflectionAgent(llm=llm, timeout=120, verbose=True)
+LlamaIndexInstrumentor().instrument()
 
 
 @app.post("/")
@@ -95,6 +87,8 @@ async def run(request: Request) -> EventSourceResponse:
 
     # Run the pipeline with the user's query
     messages: List[ChatMessage] = []
+
+    workflow = Agent(logger=logger, timeout=120, verbose=True)
 
     # Convert the request body to a list of LlamaIndex messages
     if len(body.messages) == 0:
@@ -137,18 +131,14 @@ async def run(request: Request) -> EventSourceResponse:
                         break
 
                     # Stream events to the client
-                    if isinstance(ev, WorkflowResponse):
+                    if isinstance(ev, StreamEvent):
                         yield {
                             "event": "delta",
                             "data": _format_event(ev.delta),
                         }
-                    elif isinstance(ev, WorkflowReasoning):
-                        yield {
-                            "event": "reasoning",
-                            "data": _format_event(ev.delta),
-                        }
                     else:
-                        logger.info(f"Event: {ev}")
+                        # logger.info(f"Event: {ev}")
+                        pass
 
                 logger.info(f"Got to end of event stream")
 
@@ -158,9 +148,11 @@ async def run(request: Request) -> EventSourceResponse:
 
                 # Stream the final response to the client
                 yield {"event": "response", "data": _format_event(str(result))}
+            langfuse.flush()
 
         except Exception as e:
             logger.info(f"Exception: {e}")
+            yield {"event": "error", "data": {"error": "Internal server error"}}
 
     # Start event stream
     return EventSourceResponse(event_generator())

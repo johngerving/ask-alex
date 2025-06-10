@@ -47,7 +47,7 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
                 with conn.cursor() as cur:
                     count = cur.execute(
                         """\
-                        SELECT COUNT(DISTINCT d.document)
+                        SELECT COUNT(DISTINCT d.id)
                         FROM   data_llamaindex_docs AS l
                         JOIN   documents            AS d ON d.id = l.document_id
                         WHERE  l.text_search_tsv @@ plainto_tsquery(%s);
@@ -61,13 +61,13 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
                         """\
                         SELECT *
                         FROM (
-                            SELECT DISTINCT ON (d.document)
+                            SELECT DISTINCT ON (d.id)
                                 d.document,
                                 ts_rank(l.text_search_tsv, plainto_tsquery(%s)) AS rank
                             FROM   data_llamaindex_docs AS l
                             JOIN   documents            AS d ON d.id = l.document_id
                             WHERE  l.text_search_tsv @@ plainto_tsquery(%s)
-                            ORDER  BY d.document, rank DESC
+                            ORDER  BY d.id, rank DESC
                         ) AS t
                         ORDER BY rank DESC LIMIT 10 OFFSET %s;
                         """,
