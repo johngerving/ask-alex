@@ -1,0 +1,75 @@
+# Global settings
+global:
+  environment: production
+
+# Backend service configuration
+backend:
+  replicaCount: 2
+  image:
+    repository: ask-alex-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    - name: OPENROUTER_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ask-alex-secrets
+          key: openrouter-api-key
+
+# Frontend service configuration
+frontend:
+  replicaCount: 2
+  image:
+    repository: ask-alex-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: haproxy
+  annotations:
+    kubernetes.io/ingress.class: haproxy
+    haproxy.org/ssl-redirect: "true"
+    haproxy.org/ssl-passthrough: "true"
+    haproxy.org/load-balance: "roundrobin"
+    haproxy.org/timeout-client: "50s"
+    haproxy.org/timeout-server: "50s"
+    haproxy.org/timeout-connect: "5s"
+  hosts:
+    - host: ask-alex.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service:
+            name: ask-alex-backend
+            port: 8000
+        - path: /
+          pathType: Prefix
+          service:
+            name: ask-alex-frontend
+            port: 3000
+  tls:
+    - secretName: ask-alex-tls
+      hosts:
+        - ask-alex.example.com 

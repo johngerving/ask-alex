@@ -6,16 +6,14 @@ from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
 from openai import timeout
-from ray import serve
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
-from agent.retrieval_workflow import StreamEvent
+from agent.retrieval_agent import StreamEvent
 from agent.agent import Agent
 from llama_index.core.llms import ChatMessage
 from llama_index.core.workflow import (
@@ -41,7 +39,6 @@ from langfuse import get_client
 from dotenv import load_dotenv
 
 load_dotenv()
-
 
 app = FastAPI()
 
