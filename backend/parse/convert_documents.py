@@ -92,7 +92,7 @@ class Converter:
                         metadata=metadata,
                     )
                     # Convert our document to a dictionary to store as text
-                    json_doc = Jsonb(li_doc.to_dict())
+                    json_doc = json.dumps(li_doc.to_dict())
 
                 documents.append(json_doc)
                 statuses.append(
@@ -121,13 +121,16 @@ def is_successful(row: Dict[str, Any]) -> bool:
 
 class SaveDocuments:
     def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        values = zip(batch["link"], batch["document"])
+        documents_dict = [Jsonb(json.loads(doc)) for doc in batch["document"]]
+
+        values = zip(batch["link"], documents_dict)
         with psycopg.connect(os.getenv("PG_CONN_STR"), autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.executemany(
                     "INSERT INTO documents (link, document) VALUES (%s, %s) ON CONFLICT (link) DO UPDATE SET document = EXCLUDED.document",
                     [(link, doc) for link, doc in values],
                 )
+        return batch
 
 
 def convert_documents():

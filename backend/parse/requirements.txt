@@ -1,0 +1,7 @@
+requests
+docling
+llama-index
+llama-index-vector-stores-postgres
+llama-index-node-parser-docling
+llama-index-embeddings-huggingface
+pydantic 

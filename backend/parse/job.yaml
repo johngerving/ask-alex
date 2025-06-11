@@ -1,0 +1,53 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: document-processor
+spec:
+  entrypoint: python /app/main.py
+
+  runtimeEnvYAML: |
+    env_vars:
+      PYTHONPATH: /app
+      PG_CONN_STR:
+        valueFrom:
+          secretKeyRef:
+            name: ask-alex-secrets
+            key: pg-conn-str
+
+  rayClusterSpec:
+    rayVersion: "2.41.0"
+    headGroupSpec:
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: gitlab-registry.nrp-nautilus.io/humboldt/ask-alex/parse:latest
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265 # Ray dashboard
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+              resources:
+                limits:
+                  cpu: "1"
+                requests:
+                  cpu: "200m"
+    workerGroupSpecs:
+      - replicas: 1
+        minReplicas: 1
+        maxReplicas: 8
+        groupName: worker-group
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: gitlab-registry.nrp-nautilus.io/humboldt/ask-alex/parse:latest
+                resources:
+                  limits:
+                    cpu: "1"
+                  requests:
+                    cpu: "200m"

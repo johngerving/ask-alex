@@ -1,3 +1,4 @@
+import json
 from typing import Dict
 import numpy as np
 import os
@@ -74,7 +75,8 @@ class DocumentIndexer:
         """
 
         # Get the text stored in each document, convert it to a dictionary, and convert each of those into a LlamaIndex Document
-        documents = [Document.from_dict(doc) for doc in batch["document"]]
+        docs_json = [json.loads(doc) for doc in batch["document"]]
+        documents = [Document.from_dict(doc) for doc in docs_json]
 
         for document in documents:
             # Exclude some metadata keys from being shown to the LLM and passed to the embedder so as to preserve the chunk size
@@ -139,7 +141,7 @@ def index_documents():
 
     # Read full documents from Postgres database
     ds = ray.data.read_sql(
-        "SELECT document FROM documents",
+        "SELECT TEXT(document) AS document FROM documents",
         lambda: psycopg.connect(conn_str),
     )
 

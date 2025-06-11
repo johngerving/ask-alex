@@ -8,6 +8,7 @@ REGISTRY="gitlab-registry.nrp-nautilus.io/humboldt/ask-alex"
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BACKEND_IMAGE="${REGISTRY}/backend"
 FRONTEND_IMAGE="${REGISTRY}/frontend"
+PARSE_IMAGE="${REGISTRY}/parse"
 
 # Colors for output
 RED='\033[0;31m'
@@ -42,6 +43,14 @@ if ! docker build -t "${BACKEND_IMAGE}:${VERSION}" -t "${BACKEND_IMAGE}:latest" 
 fi
 log "Backend image built successfully"
 
+# Build parse pipeline
+log "Building document processing pipeline image..."
+if ! docker build -t "${PARSE_IMAGE}:${VERSION}" -t "${PARSE_IMAGE}:latest" ./backend/parse; then
+    error "Failed to build document processing pipeline image"
+    exit 1
+fi
+log "Document processing pipeline image built successfully"
+
 # Build frontend
 log "Building frontend image..."
 if ! docker build -t "${FRONTEND_IMAGE}:${VERSION}" -t "${FRONTEND_IMAGE}:latest" ./frontend; then
@@ -54,6 +63,7 @@ log "Frontend image built successfully"
 log "Build completed successfully!"
 log "Images created:"
 log "  Backend: ${BACKEND_IMAGE}:${VERSION}"
+log "  Document Processing Pipeline: ${PARSE_IMAGE}:${VERSION}"
 log "  Frontend: ${FRONTEND_IMAGE}:${VERSION}"
 
 # Optional: Push images to registry
@@ -67,6 +77,16 @@ if [ "$1" == "--push" ]; then
     fi
     if ! docker push "${BACKEND_IMAGE}:latest"; then
         error "Failed to push backend latest tag"
+        exit 1
+    fi
+    
+    # Push parse pipeline
+    if ! docker push "${PARSE_IMAGE}:${VERSION}"; then
+        error "Failed to push document processing pipeline image"
+        exit 1
+    fi
+    if ! docker push "${PARSE_IMAGE}:latest"; then
+        error "Failed to push document processing pipeline latest tag"
         exit 1
     fi
     
@@ -89,6 +109,10 @@ log "To use these images with the Helm chart, update the values.yaml with:"
 echo "  backend:"
 echo "    image:"
 echo "      repository: ${BACKEND_IMAGE}"
+echo "      tag: ${VERSION}"
+echo "  parse:"
+echo "    image:"
+echo "      repository: ${PARSE_IMAGE}"
 echo "      tag: ${VERSION}"
 echo "  frontend:"
 echo "    image:"

@@ -2,6 +2,15 @@
 global:
   environment: production
 
+# Application secrets
+secrets:
+  # PostgreSQL connection string
+  pgConnStr: "postgresql://user:password@postgres:5432/askalex"
+  # OpenRouter API key for LLM access
+  openrouterApiKey: "your-api-key-here"
+  # Frontend URL for CORS
+  frontendUrl: "https://ask-alex.example.com"
+
 # Backend service configuration
 backend:
   replicaCount: 2

@@ -9,7 +9,7 @@ ray.init()
 ####### Document Conversion #######
 
 # Get metadata from Digital Commons and convert the PDFs
-# convert_documents()
+convert_documents()
 
 ####### Metadata Extraction #######
 # extract_metadata()
