@@ -86,12 +86,17 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
             for doc in docs:
                 display_docs.append(
                     {
+                        "doc_id": doc.doc_id[:8],
                         "title": doc.metadata.get("title", "Untitled document"),
                         "summary": doc.metadata.get("summary", None),
                     }
                 )
 
             display_object["results"] = display_docs
+
+            sources: List[Document] = await ctx.get("retrieved_documents", [])
+            sources.extend(docs)
+            await ctx.set("retrieved_documents", sources)
 
             return json.dumps(display_object, indent=2)
 

@@ -1,4 +1,4 @@
-FROM node:20-slim as builder
+FROM node:slim AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ ENV NODE_ENV=production
 RUN yarn build
 
 # Production stage
-FROM node:20-slim
+FROM node:slim
 
 WORKDIR /app
 

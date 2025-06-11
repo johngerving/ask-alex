@@ -87,7 +87,11 @@
 		bind:value={text}
 		onkeydown={handleOnKeyDown}
 	/>
-	<Button type="submit" disabled={sendDisabled} class="h-11 w-11 rounded-full p-0 transition-all">
-		<MaterialSymbolsArrowUpwardRounded class="m-2 h-full w-full text-xl" />
+	<Button
+		type="submit"
+		disabled={sendDisabled}
+		class="relative h-11 w-11 overflow-hidden rounded-full transition-all"
+	>
+		<MaterialSymbolsArrowUpwardRounded class="absolute h-3/4 w-3/4 text-xl" />
 	</Button>
 </form>

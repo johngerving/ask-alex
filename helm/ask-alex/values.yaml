@@ -25,6 +25,16 @@ backend:
         secretKeyRef:
           name: ask-alex-secrets
           key: openrouter-api-key
+    - name: FRONTEND_URL
+      valueFrom:
+        secretKeyRef:
+          name: ask-alex-secrets
+          key: frontend-url
+    - name: PG_CONN_STR
+      valueFrom:
+        secretKeyRef:
+          name: ask-alex-secrets
+          key: pg-conn-str
 
 # Frontend service configuration
 frontend:
@@ -72,4 +82,4 @@ ingress:
   tls:
     - secretName: ask-alex-tls
       hosts:
-        - ask-alex.example.com 
+        - ask-alex.example.com

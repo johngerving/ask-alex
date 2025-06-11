@@ -274,7 +274,7 @@ class RetrievalAgent(Workflow):
                 Finally, here are a set of rules that you MUST follow:
                 <rules>
                 - Do not use phrases like "based on the information provided", or "from the knowledge base". Do not refer to "chunks". Instead, refer to information as originating from "sources".
-                - Always provide inline citations for any information you use to formulate your answer, citing the id field of the chunk you used. DO NOT hallucinate a chunk id.
+                - Always provide inline citations for any information you use to formulate your answer, citing the id field of the chunk or document you used. DO NOT hallucinate a chunk id.
                     - Example 1: If you are citing a document with the id "asdfgh", you should write something like, "Apples fall to the ground in autum [asdfgh]."
                     - Example 2: If you are citing two documents with the ids "asdfgh" and "qwerty", you should write something like, "The sun rises in the east and sets in the west [asdfgh][qwerty]."
                 </rules>

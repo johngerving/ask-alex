@@ -14,8 +14,15 @@
 		value;
 
 		if (ref instanceof HTMLTextAreaElement) {
-			ref.style.height = '';
-			ref.style.height = Math.min(ref.scrollHeight + 2, 136) + 'px';
+			ref.style.height = '44px';
+
+			const style = getComputedStyle(ref);
+			const borderTop = parseFloat(style.borderTopWidth);
+			const borderBottom = parseFloat(style.borderBottomWidth);
+
+			const newHeight = ref.scrollHeight + borderTop + borderBottom;
+
+			ref.style.height = Math.min(newHeight, 136) + 'px';
 		}
 	});
 </script>
@@ -23,7 +30,7 @@
 <textarea
 	bind:this={ref}
 	class={cn(
-		'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring ease flex min-h-[80px] w-full rounded-md border px-5 py-2 text-base transition duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+		'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring ease flex h-11 w-full rounded-md border px-5 py-2 text-base transition duration-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
 		className
 	)}
 	bind:value
