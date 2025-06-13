@@ -22,6 +22,7 @@ from llama_index.core.workflow import (
 from llama_index.core.prompts import RichPromptTemplate
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.openai import OpenAI
+from llama_index.core.schema import Document
 from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
 from pydantic import BaseModel, Field
 
@@ -124,11 +125,11 @@ class RetrievalAgent(Workflow):
                 Use the tools you have available to answer user queries. Your actions will not be visible to the user.
                 Once you are done gathering information, instead of answering the user directly, you must call the handoff_to_writer tool to hand off control to an agent that will write a final answer.               
 
-                You may use multiple tools as many times as you need until you have sufficient information. The writer agent will use the retrieved information to write a comprehensive answer to the query.
+                You may use multiple tools as many times as you need until you have sufficient information. The writer agent will use the information you collect to write a comprehensive answer to the query.
 
                 Finally, here are a set of rules that you MUST follow:
                 <rules>
-                - You MUST use a tool at least once to retrieve information before answering the query.
+                - You MUST use a tool at least once to gather information before answering the query.
                 - Separate distinct queries into multiple searches.
                 - DO NOT attempt to answer the user directly. You MUST call the handoff_to_writer tool once you have determined that you are done gathering information.
                 </rules>
@@ -170,7 +171,7 @@ class RetrievalAgent(Workflow):
             await memory.aput(
                 ChatMessage(
                     role="system",
-                    content="You must call at least one tool. Call send_message to end the loop.",
+                    content="You must call at least one tool. Call handoff_to_writer to end the loop.",
                 )
             )
             return CallToolRouteEvent(input=await memory.aget())
@@ -248,7 +249,7 @@ class RetrievalAgent(Workflow):
         return CallToolRouteEvent(input=chat_history)
 
     # Retry the final answer step up to 3 times. This is to handle cases where the model outputs an empty answer.
-    @step(retry_policy=ConstantDelayRetryPolicy(delay=1, maximum_attempts=3))
+    @step  # (retry_policy=ConstantDelayRetryPolicy(delay=1, maximum_attempts=3))
     async def handle_final_answer(
         self, ctx: Context, ev: FinalAnswerEvent
     ) -> RetrievalStopEvent:
@@ -339,8 +340,9 @@ class RetrievalAgent(Workflow):
         await ctx.set("memory", memory)
 
         retrieved_nodes: List[TextNode] = await ctx.get("retrieved_nodes", [])
+        retrieved_docs: List[Document] = await ctx.get("retrieved_documents", [])
         final_formatted_response = generate_citations(
-            retrieved_nodes, full_raw_response
+            retrieved_nodes, retrieved_docs, full_raw_response
         )
 
         return RetrievalStopEvent(response=final_formatted_response, memory=memory)

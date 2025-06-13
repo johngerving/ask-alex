@@ -2,21 +2,33 @@ import re
 from typing import List
 from llama_index.core.schema import TextNode
 from llama_index.core.workflow import Context
+from llama_index.core.schema import Document
 
 
-def generate_citations(sources: List[TextNode], text: str) -> str:
+def generate_citations(
+    source_nodes: List[TextNode], source_docs: List[Document], text: str
+) -> str:
     """Generate citations for a text response based on the sources used and replace them in the text.
 
     Args:
-        sources (list[TextNode]): The total sources to generate citations for.
+        source_nodes (List[TextNode]): The total TextNodes cited in the response.
+        source_docs (List[Document]): The total Documents cited in the response.
         text (str): The text response to generate citations for.
 
     Returns:
         str: The text response with citations generated.
     """
     # Compile a list of sources used in the response
-    sources_used: List[TextNode] = []
-    for source in sources:
+    sources_used: List[TextNode | Document] = []
+
+    for source in source_docs:
+        if source.doc_id[:8] in text and not any(
+            [s.doc_id == source.doc_id for s in sources_used]
+        ):
+            # Add source to list if it's used in the response
+            sources_used.append(source)
+
+    for source in source_nodes:
         if source.node_id[:8] in text and not any(
             [s.node_id == source.node_id for s in sources_used]
         ):
@@ -27,9 +39,15 @@ def generate_citations(sources: List[TextNode], text: str) -> str:
     citations = re.findall("\[[^\]]*\]", text)
     for citation in citations:
         try:
-            matching_citation_idx = list(
-                s.node_id[:8] in citation for s in sources_used
-            ).index(True)
+            for i, source in enumerate(sources_used):
+                if hasattr(source, "doc_id"):
+                    matching_citation_idx = list(
+                        s.doc_id[:8] in citation for s in sources_used
+                    ).index(True)
+                elif hasattr(source, "node_id"):
+                    matching_citation_idx = list(
+                        s.node_id[:8] in citation for s in sources_used
+                    ).index(True)
 
             # Get the download link for a given citation
             download_link = sources_used[matching_citation_idx].metadata.get(
