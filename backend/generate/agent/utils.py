@@ -39,7 +39,7 @@ def generate_citations(
     citations = re.findall("\[[^\]]*\]", text)
     for citation in citations:
         try:
-            for i, source in enumerate(sources_used):
+            for source in sources_used:
                 if hasattr(source, "doc_id"):
                     matching_citation_idx = list(
                         s.doc_id[:8] in citation for s in sources_used
