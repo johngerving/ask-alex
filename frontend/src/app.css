@@ -36,8 +36,8 @@
 		--sidebar-accent-foreground: 124.48 55.37% 23.73%;
 		--sidebar-border: 33.91 27.06% 83.33%;
 		--sidebar-ring: 123.04 46.2% 33.53%;
-		--font-sans: Montserrat, sans-serif;
-		--font-serif: Merriweather, serif;
+		--font-sans: 'Merriweather', serif;
+		--font-serif: 'Merriweather', serif;
 		--font-mono: Source Code Pro, monospace;
 		--radius: 28px;
 		--shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
@@ -83,7 +83,7 @@
 		--sidebar-accent-foreground: 32.73 26.83% 91.96%;
 		--sidebar-border: 115.38 9.63% 26.47%;
 		--sidebar-ring: 122.42 39.44% 49.22%;
-		--font-sans: Montserrat, sans-serif;
+		--font-sans: Merriweather, serif;
 		--font-serif: Merriweather, serif;
 		--font-mono: Source Code Pro, monospace;
 		--radius: 0.5rem;

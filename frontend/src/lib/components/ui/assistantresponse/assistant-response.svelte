@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { MessageStatus, type Message } from '$lib/types/message';
 	import { Spinner } from '$lib/components/ui/spinner';
+	import { ToolCall } from '$lib/components/ui/toolcall';
 	import * as smd from 'streaming-markdown';
 	import { marked } from 'marked';
 	import { fade } from 'svelte/transition';
@@ -47,6 +48,8 @@
 			previousText = textContent;
 		}
 
+		processQueue();
+
 		return {
 			update(newTextContent: string) {
 				if (message.status === MessageStatus.Finished) {
@@ -92,24 +95,8 @@
 	}
 </script>
 
-<div class="flex w-max max-w-[75%] gap-4 px-3">
-	<div class="relative min-w-8 self-stretch">
-		{#if message.status === MessageStatus.Started || isTyping}
-			<div transition:fade={{ duration: 200 }} class="absolute left-0 right-0 top-0 h-8 w-8">
-				<Spinner />
-			</div>
-		{:else}
-			<div
-				transition:fade={{ duration: 200 }}
-				class="absolute left-0 right-0 top-0 flex h-8 w-8 items-center justify-center"
-			>
-				<div
-					class="to-primary mx-auto h-5 w-5 rounded-full bg-gradient-to-br from-green-400 via-emerald-500 shadow-md"
-				></div>
-			</div>
-		{/if}
-	</div>
-	<div class="flex-grow">
+<div class="w-max max-w-[75%] px-3">
+	<div class="">
 		{#if message.status === MessageStatus.Started || isTyping}
 			<div
 				use:markdown={messageContent}
@@ -121,4 +108,31 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if message.status === MessageStatus.Started || isTyping}
+		<div
+			transition:fade={{ duration: 200 }}
+			class="pulsing to-primary h-5 w-5 rounded-full bg-gradient-to-br from-green-400 via-emerald-500 shadow-md"
+		></div>
+	{/if}
 </div>
+
+<style>
+	@keyframes pulse-scale {
+		0% {
+			transform: scale(1);
+		}
+		50% {
+			transform: scale(1.1);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+
+	.pulsing {
+		display: block;
+		animation: pulse-scale 1.2s ease-in-out infinite;
+		transform-origin: center center;
+	}
+</style>

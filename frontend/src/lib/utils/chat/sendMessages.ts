@@ -81,6 +81,10 @@ export const sendMessages = async (
 				data = '';
 			}
 		}
+
+		// for (let i = 0; i < 100; i++) {
+		// 	fns.onUpdateContent('hello ');
+		// }
 	} catch (error: any) {
 		fns.onError(error);
 	}
