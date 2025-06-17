@@ -4,14 +4,15 @@ from typing import List
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from app.auth import auth_router
 
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
-from agent.retrieval_agent import StreamEvent
-from agent.agent import Agent
+from app.agent.retrieval_agent import StreamEvent
+from app.agent.agent import Agent
 from llama_index.core.llms import ChatMessage
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from langfuse import get_client
@@ -19,15 +20,18 @@ import logging
 
 from dotenv import load_dotenv
 
+from app.auth.auth import get_current_user
+from app.user_store.store import User
+
 load_dotenv()
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 if FRONTEND_URL is None:
     raise ValueError("FRONTEND_URL environment variable not set")
 
-COOKIE_SECRET = os.getenv("COOKIE_SECRET")
-if COOKIE_SECRET is None:
-    raise ValueError("COOKIE_SECRET environment variable not set")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if SECRET_KEY is None:
+    raise ValueError("JWT_SECRET_KEY environment variable not set")
 
 
 app = FastAPI()
@@ -49,7 +53,37 @@ app.add_middleware(
     allow_credentials=True,
 )
 
-app.add_middleware(SessionMiddleware, secret_key=COOKIE_SECRET)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
+
+@app.middleware("http")
+async def authenticate_user(request: Request, call_next):
+    if request.url.path.startswith("/auth"):
+        return await call_next(request)
+
+    access_token = request.cookies.get("access_token")
+    if not access_token:
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+    try:
+        user = get_current_user(access_token)
+    except HTTPException as e:
+        return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+
+    if not user:
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+    request.state.user = user
+
+    response = await call_next(request)
+    return response
+
+
+@app.get("/user")
+def public(request: Request) -> JSONResponse:
+    user: User = request.state.user
+
+    return JSONResponse(user.model_dump())
 
 
 class RequestMessage(BaseModel):

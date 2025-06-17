@@ -1,4 +1,7 @@
-from fastapi import APIRouter
+from email.policy import HTTP
+from typing import Optional
+import uuid
+from fastapi import APIRouter, Cookie, HTTPException
 from dotenv import load_dotenv
 import os
 from starlette.config import Config
@@ -6,8 +9,11 @@ from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.starlette_client import OAuthError
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from app.session_store import SessionStore
+from datetime import datetime, timedelta, timezone
+import jwt
 import json
+
+from app.user_store.store import User, UserStore
 
 
 load_dotenv()
@@ -24,6 +30,12 @@ if OAUTH_CLIENT_ID is None:
     raise ValueError("OAUTH_CLIENT_ID must be set")
 if OAUTH_CLIENT_SECRET is None:
     raise ValueError("OAUTH_CLIENT_SECRET must be set")
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if SECRET_KEY is None:
+    raise ValueError("JWT_SECRET_KEY must be set")
+
+ALGORITHM = "HS256"
 
 PG_CONN_STR = os.getenv("PG_CONN_STR")
 if PG_CONN_STR is None:
@@ -43,14 +55,50 @@ oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-session_store = SessionStore(PG_CONN_STR, max_age=60 * 60 * 24 * 7)
-
 router = APIRouter()
+
+user_store = UserStore(PG_CONN_STR)
+
+
+def create_access_token(user: User, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT access token.
+
+    Args:
+        user (User): The user object to encode in the JWT.
+        expires_delta (Optional[timedelta]): The expiration time for the JWT. Defaults to 30 minutes.
+    """
+    to_encode = user.model_dump()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=30))
+
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: str = Cookie(None)) -> User:
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        payload: dict = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload["email"]
+
+        user = user_store.find_by_email(email)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 @router.post("/login")
 async def login(request: Request):
+    request.session.clear()
+
     redirect_uri = request.url_for("auth")
+
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
@@ -63,30 +111,23 @@ async def auth(request: Request) -> RedirectResponse:
 
     user = access_token["userinfo"]
 
-    session_key = session_store.new(user)
+    user_email = user["email"]
+
+    # Create JWT token
+    access_token_expires = timedelta(days=7)
+
+    user = user_store.create(user_email)
+    access_token = create_access_token(user, expires_delta=access_token_expires)
 
     response = RedirectResponse(url=FRONTEND_URL)
     response.set_cookie(
-        "session",
-        session_key,
+        "access_token",
+        access_token,
         httponly=True,
         samesite="strict",
         secure=(os.getenv("ENVIRONMENT") != "development"),
     )
     return response
-
-
-@router.get("/user")
-def public(request: Request) -> JSONResponse:
-    session_key = request.cookies.get("session")
-    if not session_key:
-        return JSONResponse({"error": "Unauthorized"}, status_code=401)
-
-    user = session_store.get(session_key)
-    if not user:
-        return JSONResponse({"error": "Unauthorized"}, status_code=401)
-
-    return JSONResponse(user)
 
 
 @router.post("/auth/logout")
