@@ -1,14 +1,11 @@
 import json
 import os
-import re
-from typing import Generator, List
-from uuid import uuid4
+from typing import List
 
-from fastapi.responses import StreamingResponse
-from openai import timeout
-import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from app.auth import auth_router
 
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
@@ -16,39 +13,31 @@ from sse_starlette import EventSourceResponse
 from agent.retrieval_agent import StreamEvent
 from agent.agent import Agent
 from llama_index.core.llms import ChatMessage
-from llama_index.core.workflow import (
-    Event,
-    StartEvent,
-    StopEvent,
-    Context,
-    Workflow,
-    step,
-)
-
-from llama_index.core.agent.workflow import (
-    AgentInput,
-    AgentOutput,
-    ToolCall,
-    ToolCallResult,
-    AgentStream,
-)
-from llama_index.llms.openrouter import OpenRouter
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from langfuse import get_client
+import logging
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI()
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+if FRONTEND_URL is None:
+    raise ValueError("FRONTEND_URL environment variable not set")
 
-import logging
+COOKIE_SECRET = os.getenv("COOKIE_SECRET")
+if COOKIE_SECRET is None:
+    raise ValueError("COOKIE_SECRET environment variable not set")
+
+
+app = FastAPI()
+app.include_router(auth_router, prefix="/auth")
+
 
 logger = logging.getLogger("ray.serve")
 
-logger.info(f"Frontend URL: {os.getenv('FRONTEND_URL')}")
 
-allow_origins = [os.getenv("FRONTEND_URL")]
+allow_origins = [FRONTEND_URL]
 
 if None in allow_origins:
     raise Exception("FRONTEND_URL environment variable is required")
@@ -57,7 +46,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_methods=["GET", "POST"],
+    allow_credentials=True,
 )
+
+app.add_middleware(SessionMiddleware, secret_key=COOKIE_SECRET)
 
 
 class RequestMessage(BaseModel):

@@ -1,3 +1,0 @@
-"""
-Generate service package.
-""" 
