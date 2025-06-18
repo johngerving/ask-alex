@@ -16,15 +16,17 @@
 	bind:this={ref}
 	use:scrollToBottom={messageStore.messages}
 	class="[&::-webkit-scrollbar-track]:bg-background
-    flex
-    h-full w-full flex-col
-	gap-6 overflow-y-auto
+    gradientback
+    flex h-full w-full
+	flex-col gap-6
+    overflow-y-auto pb-4
+    pr-2
     [&::-webkit-scrollbar-thumb]:rounded-full
     [&::-webkit-scrollbar-thumb]:bg-zinc-200
     dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500
     [&::-webkit-scrollbar-track]:rounded-full
-    dark:[&::-webkit-scrollbar-track]:bg-neutral-700
-    [&::-webkit-scrollbar]:w-2
+	dark:[&::-webkit-scrollbar-track]:bg-neutral-700
+	[&::-webkit-scrollbar]:w-2
     "
 	style="scrollbar-gutter: stable"
 >
@@ -36,3 +38,10 @@
 		{/if}
 	{/each}
 </div>
+
+<style>
+	.gradientback {
+		-webkit-mask: linear-gradient(#000 0%, #000 calc(100% - 40px), #0000 100%);
+		mask: linear-gradient(#000 0%, #000 calc(100% - 40px), #0000 100%);
+	}
+</style>

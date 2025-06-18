@@ -67,8 +67,8 @@ const config: Config = {
 				sm: 'calc(var(--radius) - 4px)'
 			},
 			fontFamily: {
-				// sans: ['InterVariable', ...fontFamily.sans]
-				sans: ['Merriweather', ...fontFamily.sans]
+				sans: ['InterVariable', ...fontFamily.sans]
+				// sans: ['Merriweather', ...fontFamily.sans]
 			},
 			keyframes: {
 				'accordion-down': {

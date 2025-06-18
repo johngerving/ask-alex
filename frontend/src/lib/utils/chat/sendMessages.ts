@@ -1,6 +1,6 @@
 import { type Message } from '$lib/types/message';
 
-import { PUBLIC_RAG_ENDPOINT } from '$env/static/public';
+import { PUBLIC_BACKEND_URL } from '$env/static/public';
 
 export const sendMessages = async (
 	messages: Message[],
@@ -18,11 +18,12 @@ export const sendMessages = async (
 		fns.onStart();
 
 		// Make a request to the RAG endpoint
-		const res = await fetch(PUBLIC_RAG_ENDPOINT, {
+		const res = await fetch(`${PUBLIC_BACKEND_URL}/chat`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'
 			},
+			credentials: 'include',
 			body: JSON.stringify({ messages: messagesCopy }) // Pass in query as body of request
 		});
 

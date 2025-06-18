@@ -43,15 +43,11 @@ logger = logging.getLogger("ray.serve")
 
 allow_origins = [FRONTEND_URL]
 
+print("Allow origins: ", allow_origins)
+
 if None in allow_origins:
     raise Exception("FRONTEND_URL environment variable is required")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_methods=["GET", "POST"],
-    allow_credentials=True,
-)
 
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
@@ -79,6 +75,14 @@ async def authenticate_user(request: Request, call_next):
     return response
 
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_credentials=True,
+)
+
+
 @app.get("/user")
 def public(request: Request) -> JSONResponse:
     user: User = request.state.user
@@ -104,7 +108,7 @@ logger = logging.getLogger("ray.serve")
 LlamaIndexInstrumentor().instrument()
 
 
-@app.post("/")
+@app.post("/chat")
 async def run(request: Request) -> EventSourceResponse:
     body = RAGBody(**await request.json())
 
