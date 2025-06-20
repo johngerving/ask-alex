@@ -6,7 +6,7 @@
 	let user = $derived(data.user);
 </script>
 
-<main class="w-full flex-grow overflow-hidden pb-2">
+<main class="h-full w-full pb-2">
 	{#if user}
 		<Chat />
 	{:else}
