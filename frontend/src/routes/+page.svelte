@@ -1,15 +1,3 @@
-<script lang="ts">
-	import { Chat } from '$lib/components/chat';
-	import type { PageProps } from './$types';
-
-	let { data }: PageProps = $props();
-	let user = $derived(data.user);
-</script>
-
-<main class="h-full w-full pb-2">
-	{#if user}
-		<Chat />
-	{:else}
-		<p>Not authenticated</p>
-	{/if}
+<main class="flex h-full w-full items-center justify-center">
+	<h1 class="text-muted-foreground text-4xl">No Chat Selected</h1>
 </main>

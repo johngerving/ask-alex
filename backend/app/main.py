@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from app.auth import auth_router
+from app.chat import chat_router
 
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
@@ -36,6 +37,7 @@ if SECRET_KEY is None:
 
 app = FastAPI()
 app.include_router(auth_router, prefix="/auth")
+app.include_router(chat_router, prefix="/chat")
 
 
 logger = logging.getLogger("ray.serve")
@@ -78,7 +80,7 @@ async def authenticate_user(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_credentials=True,
 )
 
@@ -108,7 +110,7 @@ logger = logging.getLogger("ray.serve")
 LlamaIndexInstrumentor().instrument()
 
 
-@app.post("/chat")
+@app.post("/chat/messages")
 async def run(request: Request) -> EventSourceResponse:
     body = RAGBody(**await request.json())
 

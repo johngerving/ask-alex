@@ -18,7 +18,7 @@ export const sendMessages = async (
 		fns.onStart();
 
 		// Make a request to the RAG endpoint
-		const res = await fetch(`${PUBLIC_BACKEND_URL}/chat`, {
+		const res = await fetch(`${PUBLIC_BACKEND_URL}/chat/messages`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'

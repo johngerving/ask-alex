@@ -1,13 +1,12 @@
 from email.policy import HTTP
 from typing import Optional
 import uuid
-from fastapi import APIRouter, Cookie, HTTPException
+from fastapi import APIRouter, Cookie, HTTPException, Request
 from dotenv import load_dotenv
 import os
 from starlette.config import Config
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.starlette_client import OAuthError
-from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from datetime import datetime, timedelta, timezone
 import jwt
