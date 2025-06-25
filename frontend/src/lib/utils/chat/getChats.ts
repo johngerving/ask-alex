@@ -17,11 +17,19 @@ export async function getChats(fetch: FetchFunction): Promise<Chat[]> {
 
 	if (!Array.isArray(data)) throw new Error('Invalid response from server');
 
-	for (const id of data) {
-		if (typeof id !== 'number') throw new Error('Invalid chat ID type');
+	for (const chat of data) {
+		if (typeof chat !== 'object' || chat === null) {
+			throw new Error('Invalid chat object');
+		}
+		if (!('id' in chat)) throw new Error('Chat object missing id');
+		if (typeof chat.id !== 'number') throw new Error('Invalid chat ID type');
+
+		if (!('title' in chat)) throw new Error('Chat object missing title');
+		if (typeof chat.title !== 'string') throw new Error('Invalid chat title type');
 
 		chats.push({
-			id
+			id: chat.id,
+			title: chat.title
 		});
 	}
 

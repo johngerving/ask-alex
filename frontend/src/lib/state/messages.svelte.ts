@@ -20,6 +20,9 @@ export const messageStore = {
 	get messages() {
 		return messages;
 	},
+	set messages(newMessages: Message[]) {
+		messages = newMessages;
+	},
 	createMessage(message: Message) {
 		messages.push(message);
 	},

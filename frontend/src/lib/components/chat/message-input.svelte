@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Message } from '$lib/types/message';
 	import { MessageStatus, MessageUpdateType } from '$lib/types/message';
-	import { messageStore } from '$lib/state/messages.svelte';
 
 	import { Button } from '$lib/components/ui/button';
 	import { ChatTextarea } from '$lib/components/ui/chattextarea';
@@ -10,6 +9,9 @@
 	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
 	import { v4 } from 'uuid';
+	import { invalidateAll } from '$app/navigation';
+
+	let { chatId, chatHistory = $bindable() }: { chatId: number; chatHistory: Message[] } = $props();
 
 	let text = $state('');
 
@@ -30,47 +32,93 @@
 		let assistantMessageId = v4();
 
 		// Add a message
-		messageStore.createMessage({
-			content: text,
-			reasoning: '',
-			role: 'user',
-			id: userMessageId,
-			status: MessageStatus.Finished
-		});
+		// messageStore.createMessage({
+		// 	content: text,
+		// 	reasoning: '',
+		// 	role: 'user',
+		// 	id: userMessageId,
+		// 	status: MessageStatus.Finished
+		// });
 
-		sendMessages(messageStore.messages, {
+		console.log('Sending message:', text);
+		// chatHistory.push({
+		// 	id: userMessageId,
+		// 	content: text,
+		// 	reasoning: '',
+		// 	role: 'user',
+		// 	status: MessageStatus.Finished
+		// });
+		chatHistory = [
+			...chatHistory,
+			{
+				id: userMessageId,
+				content: text,
+				reasoning: '',
+				role: 'user',
+				status: MessageStatus.Finished
+			}
+		];
+
+		sendMessages(chatHistory, chatId, {
 			onStart: () => {
-				messageStore.createMessage({
-					content: '',
-					reasoning: '',
-					role: 'assistant',
-					id: assistantMessageId,
-					status: MessageStatus.Started
-				});
+				chatHistory = [
+					...chatHistory,
+					{
+						id: assistantMessageId,
+						content: '',
+						reasoning: '',
+						role: 'assistant',
+						status: MessageStatus.Started
+					}
+				];
 			},
 			onUpdateContent: (delta: string) => {
-				messageStore.updateMessage(assistantMessageId, {
-					type: MessageUpdateType.Delta,
-					delta: delta
+				chatHistory = chatHistory.map((message) => {
+					if (message.id === assistantMessageId) {
+						return {
+							...message,
+							content: message.content + delta
+						};
+					}
+					return message;
 				});
 			},
 			onUpdateReasoning: (delta: string) => {
-				messageStore.updateMessage(assistantMessageId, {
-					type: MessageUpdateType.ReasoningDelta,
-					delta: delta
+				chatHistory = chatHistory.map((message) => {
+					if (message.id === assistantMessageId) {
+						return {
+							...message,
+							reasoning: message.reasoning + delta
+						};
+					}
+					return message;
 				});
 			},
 			onFinish: (response: string) => {
-				messageStore.updateMessage(assistantMessageId, {
-					type: MessageUpdateType.FinalAnswer,
-					text: response
+				chatHistory = chatHistory.map((message) => {
+					if (message.id === assistantMessageId) {
+						return {
+							...message,
+							content: response,
+							status: MessageStatus.Finished
+						};
+					}
+					return message;
 				});
+
+				invalidateAll(); // Invalidate all data to refresh the chat history
 			},
-			onError: (error: any) => {
+			onError: (error: string) => {
 				console.error(error);
-				messageStore.updateMessage(assistantMessageId, {
-					type: MessageUpdateType.Error,
-					error: error.message
+				chatHistory = chatHistory.map((message) => {
+					if (message.id === assistantMessageId) {
+						return {
+							...message,
+							content: error,
+							status: MessageStatus.Error
+						};
+					}
+					return message;
 				});
 			}
 		});

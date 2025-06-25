@@ -1,37 +1,37 @@
 import re
 from typing import List
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import TextNode, NodeWithScore
 from llama_index.core.workflow import Context
 from llama_index.core.schema import Document
+import logging
+
+from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
-def generate_citations(
-    source_nodes: List[TextNode], source_docs: List[Document], text: str
-) -> str:
+class Source(BaseModel):
+    """Model for a citation source."""
+
+    id: str
+    link: str
+
+
+def generate_citations(sources: List[Source], text: str) -> str:
     """Generate citations for a text response based on the sources used and replace them in the text.
 
     Args:
-        source_nodes (List[TextNode]): The total TextNodes cited in the response.
-        source_docs (List[Document]): The total Documents cited in the response.
+        sources (List[Source]): A list of sources used in the response
         text (str): The text response to generate citations for.
 
     Returns:
         str: The text response with citations generated.
     """
     # Compile a list of sources used in the response
-    sources_used: List[TextNode | Document] = []
+    sources_used: List[Source] = []
 
-    for source in source_docs:
-        if source.doc_id[:8] in text and not any(
-            [s.doc_id == source.doc_id for s in sources_used]
-        ):
-            # Add source to list if it's used in the response
-            sources_used.append(source)
-
-    for source in source_nodes:
-        if source.node_id[:8] in text and not any(
-            [s.node_id == source.node_id for s in sources_used]
-        ):
+    for source in sources:
+        if source.id in text and not any([s.id == source.id for s in sources_used]):
             # Add source to list if it's used in the response
             sources_used.append(source)
 
@@ -40,28 +40,17 @@ def generate_citations(
     for citation in citations:
         try:
             for source in sources_used:
-                if hasattr(source, "doc_id"):
-                    matching_citation_idx = list(
-                        s.doc_id[:8] in citation for s in sources_used
-                    ).index(True)
-                elif hasattr(source, "node_id"):
-                    matching_citation_idx = list(
-                        s.node_id[:8] in citation for s in sources_used
-                    ).index(True)
-
-            # Get the download link for a given citation
-            download_link = sources_used[matching_citation_idx].metadata.get(
-                "download_link"
-            )
-            if download_link is None:
-                raise ValueError("download_link not found")
+                matching_citation_idx = list(
+                    s.id in citation for s in sources_used
+                ).index(True)
 
             # Replace the citation with a link to the document
             text = text.replace(
                 citation,
-                f"[[{matching_citation_idx+1}]]({sources_used[matching_citation_idx].metadata.get('download_link')})",
+                f"[[{matching_citation_idx+1}]]({sources_used[matching_citation_idx].link})",
             )
-        except ValueError as e:
+        except Exception as e:
+            logger.error(f"Error generating citation for {citation}: {e}")
             text = text.replace(citation, "")
 
     return text

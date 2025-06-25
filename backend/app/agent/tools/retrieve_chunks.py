@@ -11,10 +11,12 @@ from llama_index.core import VectorStoreIndex
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.retrievers import QueryFusionRetriever
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import TextNode, NodeWithScore
 from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM
 from llama_index.llms.openrouter import OpenRouter
+
+from app.agent.utils import Source
 
 
 async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
@@ -106,18 +108,22 @@ async def make_retrieve_chunks_tool(ctx: Context) -> FunctionTool:
         try:
             # Use the retriever to get relevant nodes
             nodes = await retriever.aretrieve(query)
+            sources_used = [
+                Source(id=node.node_id, link=node.metadata.get("download_link", None))
+                for node in nodes
+            ]
 
             # Get sources set in tool
-            sources: List[TextNode] = await ctx.get("retrieved_nodes", [])
-            sources = sources + nodes
-            await ctx.set("retrieved_nodes", sources)
+            sources: List[Source] = await ctx.get("retrieved_sources", [])
+            sources = sources + sources_used
+            await ctx.set("retrieved_sources", sources)
 
             content = ""
 
             for node in nodes:
                 # Format chunks to be returned to agent
                 content += ("<chunk id={doc_id}>\n" "{content}\n" "</chunk>\n").format(
-                    doc_id=node.node_id[:8],
+                    doc_id=node.node_id,
                     content=node.get_content(metadata_mode=MetadataMode.LLM),
                 )
 

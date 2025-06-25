@@ -106,6 +106,8 @@
 			<div class="markdown [&_a:hover]:underline [&_a]:text-blue-500">
 				{@html marked(message.content)}
 			</div>
+		{:else if message.status === MessageStatus.Error}
+			<div class="text-destructive">{message.content}</div>
 		{/if}
 	</div>
 

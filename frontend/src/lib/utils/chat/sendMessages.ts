@@ -4,12 +4,13 @@ import { PUBLIC_BACKEND_URL } from '$env/static/public';
 
 export const sendMessages = async (
 	messages: Message[],
+	chatId: number,
 	fns: {
 		onStart: () => void;
 		onUpdateContent: (delta: string) => void;
 		onUpdateReasoning: (delta: string) => void;
 		onFinish: (response: string) => void;
-		onError: (error: any) => void;
+		onError: (error: string) => void;
 	}
 ) => {
 	try {
@@ -24,7 +25,7 @@ export const sendMessages = async (
 				'Content-Type': 'application/json'
 			},
 			credentials: 'include',
-			body: JSON.stringify({ messages: messagesCopy }) // Pass in query as body of request
+			body: JSON.stringify({ messages: messagesCopy, chatId }) // Pass in query as body of request
 		});
 
 		const reader = res.body?.getReader();
@@ -75,6 +76,13 @@ export const sendMessages = async (
 						return;
 					} catch (error) {
 						console.error('Error parsing response:', error);
+					}
+				} else if (eventType === 'error') {
+					try {
+						const errorMessage = parseData(data);
+						fns.onError(errorMessage);
+					} catch (error) {
+						console.error('Error parsing error message:', error);
 					}
 				}
 

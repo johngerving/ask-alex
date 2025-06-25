@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Literal
 from llama_index.core.llms.function_calling import FunctionCallingLLM
 from llama_index.core.memory import Memory
 from llama_index.core.tools.types import BaseTool
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import TextNode, NodeWithScore
 from llama_index.core.workflow import (
     Context,
     Workflow,
@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from .tools.search_documents import make_document_search_tool
 from .tools.retrieve_chunks import make_retrieve_chunks_tool
 
-from .utils import generate_citations, remove_citations
+from .utils import Source, generate_citations, remove_citations
 
 
 class CallToolRouteEvent(Event):
@@ -59,6 +59,7 @@ class RetrievalStartEvent(StartEvent):
 class RetrievalStopEvent(StopEvent):
     response: str
     memory: Memory
+    retrieved_sources: List[Source]
 
 
 def handoff_to_writer():
@@ -339,10 +340,13 @@ class RetrievalAgent(Workflow):
         await memory.aput(response.message)
         await ctx.set("memory", memory)
 
-        retrieved_nodes: List[TextNode] = await ctx.get("retrieved_nodes", [])
-        retrieved_docs: List[Document] = await ctx.get("retrieved_documents", [])
+        retrieved_sources: List[Source] = await ctx.get("retrieved_sources", [])
         final_formatted_response = generate_citations(
-            retrieved_nodes, retrieved_docs, full_raw_response
+            retrieved_sources, full_raw_response
         )
 
-        return RetrievalStopEvent(response=final_formatted_response, memory=memory)
+        return RetrievalStopEvent(
+            response=final_formatted_response,
+            memory=memory,
+            retrieved_sources=retrieved_sources,
+        )

@@ -20,6 +20,8 @@ from llama_index.core.llms import LLM
 from llama_index.core.schema import Document
 import psycopg
 
+from app.agent.utils import Source
+
 # SELECT DISTINCT elem FROM documents CROSS JOIN LATERAL jsonb_array_elements_text(document->'metadata'->'discipline') AS t(elem) WHERE jsonb_typeof(document->'metadata'->'discipline') = 'array';
 
 
@@ -86,7 +88,7 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
             for doc in docs:
                 display_docs.append(
                     {
-                        "doc_id": doc.doc_id[:8],
+                        "doc_id": doc.doc_id,
                         "title": doc.metadata.get("title", "Untitled document"),
                         "summary": doc.metadata.get("summary", None),
                     }
@@ -94,9 +96,17 @@ async def make_document_search_tool(ctx: Context) -> FunctionTool:
 
             display_object["results"] = display_docs
 
-            sources: List[Document] = await ctx.get("retrieved_documents", [])
-            sources.extend(docs)
-            await ctx.set("retrieved_documents", sources)
+            sources_used = [
+                Source(
+                    id=doc.doc_id,
+                    link=doc.metadata.get("download_link", None),
+                )
+                for doc in docs
+            ]
+
+            sources: List[Source] = await ctx.get("retrieved_sources", [])
+            sources.extend(sources_used)
+            await ctx.set("retrieved_sources", sources)
 
             return json.dumps(display_object, indent=2)
 

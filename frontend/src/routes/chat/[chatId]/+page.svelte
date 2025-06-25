@@ -4,6 +4,8 @@
 	let { data } = $props();
 
 	let user = $derived(data.user);
+	let chatId = $derived(data.chatId);
+
 	let chatHistory = $derived(data.chatHistory);
 
 	$inspect(chatHistory);
@@ -11,7 +13,7 @@
 
 <main class="h-full w-full pb-2">
 	{#if user}
-		<Chat />
+		<Chat {chatId} bind:chatHistory />
 	{:else}
 		<p>Not authenticated</p>
 	{/if}

@@ -4,7 +4,7 @@ from operator import is_
 import os
 from typing import Annotated, Any, Dict, Iterator, Optional, Literal, List
 from urllib.parse import urlparse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 from logging import Logger
 import re
 
@@ -35,7 +35,7 @@ from llama_index.core.agent.workflow import AgentStream
 from llama_index.core.schema import TextNode
 from llama_index.core import set_global_handler
 from llama_index.core.schema import MetadataMode
-from llama_index.core.llms import LLM
+from llama_index.core.llms import LLM, TextBlock
 from llama_index.core.memory import Memory
 
 
@@ -51,7 +51,11 @@ class WorkflowStartEvent(StartEvent):
     """Event to start the workflow."""
 
     message: ChatMessage
-    history: List[ChatMessage]
+    memory: Optional[Memory] = None
+
+    @model_serializer
+    def serialize_start_event(self) -> dict:
+        return {"message": self.message}
 
 
 class ChatOrRetrievalRouteEvent(Event):
@@ -64,6 +68,10 @@ class ChatRouteEvent(Event):
 
 class RetrievalRouteEvent(Event):
     pass
+
+
+class GenerateTitleEvent(Event):
+    response: str
 
 
 class ChatOrRetrieval(BaseModel):
@@ -125,20 +133,13 @@ class Agent(Workflow):
     ) -> ChatOrRetrievalRouteEvent:
         self.logger.info("Running setup step")
 
-        await ctx.set("logger", self.logger)
-
         # Only use the last n messages
         # n = 3
         # history: List[ChatMessage] = ev.history[max(0, len(ev.history) - n) :]
-        history: List[ChatMessage] = ev.history
-        for m in history:
-            m.content = remove_citations(m.content)
-        history: List[ChatMessage] = ev.history
+        memory = ev.memory
 
-        memory: Memory = Memory.from_defaults()
-
-        for m in history:
-            await memory.aput(m)
+        if not memory:
+            memory = Memory.from_defaults()
 
         await memory.aput(ev.message)
 
@@ -156,7 +157,7 @@ class Agent(Workflow):
         sllm = self.small_llm.as_structured_llm(output_cls=ChatOrRetrieval)
 
         memory: Memory = await ctx.get("memory")
-        history = memory.get()
+        history = await memory.aget()
 
         # Call the LLM to determine the route
         json_obj: Dict[str, str] = sllm.chat(
@@ -176,12 +177,12 @@ class Agent(Workflow):
             return RetrievalRouteEvent()
 
     @step
-    async def chat(self, ctx: Context, ev: ChatRouteEvent) -> StopEvent:
+    async def chat(self, ctx: Context, ev: ChatRouteEvent) -> GenerateTitleEvent:
         """Handle the chat route by generating a response using the LLM."""
         self.logger.info("Running step chat")
 
         memory: Memory = await ctx.get("memory")
-        history = memory.get()
+        history = await memory.aget()
 
         agent = FunctionAgent(
             llm=self.small_llm,
@@ -197,15 +198,19 @@ class Agent(Workflow):
             if isinstance(ev, AgentStream) and ev.response:
                 ctx.write_event_to_stream(StreamEvent(delta=ev.delta))
 
-        response = await handler
+        response = str(await handler)
 
-        memory.put(ChatMessage(role="assistant", content=response))
+        await memory.aput(ChatMessage(role="assistant", content=response))
         await ctx.set("memory", memory)
 
-        return StopEvent(result=response)
+        print("Memory dict:", memory.to_dict())
+
+        return GenerateTitleEvent(response=response)
 
     @step
-    async def retrieve(self, ctx: Context, ev: RetrievalRouteEvent) -> StopEvent:
+    async def retrieve(
+        self, ctx: Context, ev: RetrievalRouteEvent
+    ) -> GenerateTitleEvent:
         """Handle the retrieval route by searching the knowledge base for information."""
         w = RetrievalAgent(
             writer_llm=self.writer_llm,
@@ -228,5 +233,51 @@ class Agent(Workflow):
 
         # Update the context memory with the final response from the retrieval agent
         await ctx.set("memory", result.memory)
+        await ctx.set("retrieved_sources", result.retrieved_sources)
 
-        return StopEvent(result=result.response)
+        return GenerateTitleEvent(response=result.response)
+
+    @step
+    async def generate_title(self, ctx: Context, ev: GenerateTitleEvent) -> StopEvent:
+        """Generate a title for the chat."""
+
+        retrieved_nodes = await ctx.get("retrieved_nodes", [])
+        print("Retrieved nodes in generate_title:", retrieved_nodes)
+
+        print("Generating title for chat...")
+        title: str = await ctx.get("chat_title", None)
+
+        if title:
+            return StopEvent(result=ev.response)
+
+        memory: Memory = await ctx.get("memory")
+        history = await memory.aget()
+
+        # Use the small LLM to generate a title based on the chat history
+        system_msg = ChatMessage(
+            role="system",
+            content="Given the following chat history, generate a concise and descriptive title for the chat. The title should be no more than 5 words long. Format your title in plain text; DO NOT use markdown. /no_think",
+        )
+
+        user_msg_content = ""
+
+        for message in history:
+            text_contents = "\n".join(
+                block.text for block in message.blocks if isinstance(block, TextBlock)
+            )
+
+            user_msg_content += (
+                f"<message role={message.role}>\n{text_contents}\n</message>\n"
+            )
+
+        user_msg = ChatMessage(role="user", content=user_msg_content)
+
+        title = self.small_llm.chat(
+            messages=[system_msg, user_msg],
+        ).message.content
+
+        print("Generated title:", title)
+
+        await ctx.set("chat_title", title)
+
+        return StopEvent(result=ev.response)
