@@ -37,7 +37,7 @@ class CallToolRouteEvent(Event):
 
 
 class FinalAnswerEvent(Event):
-    message: str
+    pass
 
 
 class StreamEvent(Event):
@@ -114,7 +114,7 @@ class RetrievalAgent(Workflow):
     @step
     async def handle_tools_route(
         self, ctx: Context, ev: CallToolRouteEvent
-    ) -> CallToolRouteEvent | ToolCallEvent:
+    ) -> CallToolRouteEvent | ToolCallEvent | FinalAnswerEvent:
         memory: Memory = await ctx.get("memory")
         chat_history = await memory.aget()
 
@@ -159,13 +159,19 @@ class RetrievalAgent(Workflow):
         memory: Memory = await ctx.get("memory")
         response.message.content = ""
 
-        await memory.aput(response.message)
-        await ctx.set("memory", memory)
-
         # Get tool calls
         tool_calls = self.tool_llm.get_tool_calls_from_response(
             response, error_on_no_tool_call=False
         )
+
+        if any(
+            [tool_call.tool_name == "handoff_to_writer" for tool_call in tool_calls]
+        ):
+            # If the agent has called the handoff_to_writer tool, we can stop the workflow and return the final answer.
+            return FinalAnswerEvent()
+
+        await memory.aput(response.message)
+        await ctx.set("memory", memory)
 
         if not tool_calls:
             # Continue the loop if no tool calls are found. We want the agent to explicitly call a tool to end the loop.
@@ -213,10 +219,6 @@ class RetrievalAgent(Workflow):
             # Call the tool
             try:
                 tool_output = await tool.acall(**tool_call.tool_kwargs)
-
-                # If the tool is the handoff_to_writer tool, return the final answer
-                if tool_call.tool_name == "handoff_to_writer":
-                    return FinalAnswerEvent(message=tool_output.content)
 
                 # Insert the result of the tool call into the sources list
                 sources.append(tool_output)

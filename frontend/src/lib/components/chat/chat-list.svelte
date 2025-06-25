@@ -21,7 +21,7 @@
 {#await chatsPromise}
 	<p>Loading chats...</p>
 {:then chats}
-	{#each chats as chat}
+	{#each chats as chat (chat.id)}
 		<Sidebar.MenuItem
 			style="list-style: none;"
 			class={cn('rounded-md', chat.id === selectedChatId ? 'bg-accent' : '')}

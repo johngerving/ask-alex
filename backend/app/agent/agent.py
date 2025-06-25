@@ -26,7 +26,7 @@ from llama_index.core.agent.workflow import (
 from llama_index.llms.openrouter import OpenRouter
 from llama_index.core.agent.workflow import ReActAgent, FunctionAgent
 from llama_index.core.tools import FunctionTool, RetrieverTool
-from llama_index.core.llms import ChatMessage
+from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -38,13 +38,17 @@ from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM, TextBlock
 from llama_index.core.memory import Memory
 
+from app.agent.tools.retrieve_chunks import make_retrieve_chunks_tool
+from app.agent.tools.search_documents import make_document_search_tool
+
 
 from .prompts import (
     BASE_PROMPT,
+    RETRIEVAL_AGENT_PROMPT,
     ROUTER_AGENT_PROMPT,
 )
 from .retrieval_agent import RetrievalAgent, RetrievalStopEvent, StreamEvent
-from .utils import remove_citations
+from .utils import filter_tool_calls, filter_tool_results, remove_citations
 
 
 class WorkflowStartEvent(StartEvent):
@@ -159,6 +163,9 @@ class Agent(Workflow):
         memory: Memory = await ctx.get("memory")
         history = await memory.aget()
 
+        history = filter_tool_results(history)
+        history = filter_tool_calls(history)
+
         # Call the LLM to determine the route
         json_obj: Dict[str, str] = sllm.chat(
             messages=[
@@ -183,6 +190,8 @@ class Agent(Workflow):
 
         memory: Memory = await ctx.get("memory")
         history = await memory.aget()
+
+        history = filter_tool_results(history)
 
         agent = FunctionAgent(
             llm=self.small_llm,
@@ -219,7 +228,7 @@ class Agent(Workflow):
             verbose=self._verbose,
         )
 
-        memory = await ctx.get("memory")
+        memory: Memory = await ctx.get("memory")
 
         # Use the current memory as the initial memory for the retrieval agent
         handler = w.run(memory=memory)
