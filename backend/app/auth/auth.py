@@ -106,7 +106,7 @@ async def auth(request: Request) -> RedirectResponse:
     try:
         access_token = await oauth.google.authorize_access_token(request)
     except OAuthError:
-        return RedirectResponse(url=FRONTEND_URL)
+        return RedirectResponse(url=f"{FRONTEND_URL}/chat")
 
     user = access_token["userinfo"]
 
@@ -118,7 +118,7 @@ async def auth(request: Request) -> RedirectResponse:
     user = user_store.create(user_email)
     access_token = create_access_token(user, expires_delta=access_token_expires)
 
-    response = RedirectResponse(url=FRONTEND_URL)
+    response = RedirectResponse(url=f"{FRONTEND_URL}/chat")
     response.set_cookie(
         "access_token",
         access_token,

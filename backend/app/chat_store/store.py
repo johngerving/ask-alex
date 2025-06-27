@@ -116,7 +116,6 @@ class ChatStore:
 
                 try:
                     ctx_dict = context.to_dict(serializer=JsonSerializer())
-                    print("Serialized context:", ctx_dict)
                 except Exception as e:
                     raise ValueError(f"Failed to serialize context: {e}")
 

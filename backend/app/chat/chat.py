@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, get_args
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from app.chat_store import ChatStore
@@ -8,17 +8,19 @@ from llama_index.core.memory import Memory
 from llama_index.core.workflow.context import Context
 from sse_starlette import EventSourceResponse
 from pydantic import BaseModel
-from app.agent.retrieval_agent import StreamEvent
-from app.agent.agent import Agent
+from app.agent.agent import Agent, StreamEvent
 from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.base.llms.types import ChatResponse
 from llama_index.core.workflow import JsonSerializer, JsonPickleSerializer
+from llama_index.core.agent.workflow import AgentStream
+from llama_index.llms.openai.utils import OpenAIToolCall
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from langfuse import get_client
 import json
 import logging
 
 from app.user_store.store import User
-from app.agent.utils import Source, generate_citations
+from app.agent.utils import Source, filter_writer_handoff, generate_citations
 
 load_dotenv()
 
@@ -102,11 +104,13 @@ async def get_chat(chat_id: int, request: Request):
     user: User = request.state.user
 
     memory = Memory.from_defaults(
+        token_limit=127000,
         session_id=f"{user.id}-{chat_id}",
         async_database_uri=SQLALCHEMY_CONN_STR,
     )
 
     chat_history = await memory.aget_all()
+    chat_history = filter_writer_handoff(chat_history)
 
     chat = chat_store.find_by_id(chat_id, user)
     w = Agent(logger=None)
@@ -118,7 +122,7 @@ async def get_chat(chat_id: int, request: Request):
 
     retrieved_sources: List[Source] = await ctx.get("retrieved_sources", [])
 
-    display_history: List[RequestMessage] = []
+    display_history: List[RequestMessage | RequestToolCall] = []
 
     for msg in chat_history:
         if msg.role == MessageRole.USER:
@@ -126,6 +130,25 @@ async def get_chat(chat_id: int, request: Request):
                 RequestMessage(content=msg.content or "", role="user")
             )
         elif msg.role == MessageRole.ASSISTANT:
+            print(msg.model_dump())
+            chat_response = ChatResponse(message=msg)
+            tool_calls = msg.additional_kwargs.get("tool_calls", [])
+
+            # if tool_calls:
+            #     print("Tool call type:", tool_calls[0])
+            # print("Chat response:", chat_response.model_dump())
+            tool_calls = w.tool_llm.get_tool_calls_from_response(
+                chat_response, error_on_no_tool_call=False
+            )
+
+            for tool_call in tool_calls:
+                display_history.append(
+                    RequestToolCall(
+                        name=tool_call.tool_name,
+                        kwargs=tool_call.tool_kwargs or {},
+                    )
+                )
+
             formatted_content = generate_citations(retrieved_sources, msg.content or "")
             display_history.append(
                 RequestMessage(content=formatted_content, role="assistant")
@@ -135,8 +158,15 @@ async def get_chat(chat_id: int, request: Request):
 
 
 class RequestMessage(BaseModel):
+    type: str = "message"
     content: str
     role: str
+
+
+class RequestToolCall(BaseModel):
+    type: str = "tool_call"
+    name: str
+    kwargs: dict
 
 
 class RAGBody(BaseModel):

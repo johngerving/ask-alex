@@ -1,3 +1,4 @@
+import { goto } from '$app/navigation';
 import { PUBLIC_BACKEND_URL } from '$env/static/public';
 import type { FetchFunction } from '$lib/types/fetchFunction';
 
