@@ -1,0 +1,388 @@
+
+[
+  {
+    "canonical": "Anthropology",
+    "variations": [
+      "Anthropology",
+      "Applied Anthropology"
+    ]
+  },
+  {
+    "canonical": "Biology",
+    "variations": [
+      "Biological Sciences",
+      "Biological Sciences (Mycology)",
+	  "Biology",
+	  "Natural Resources: Biology",
+	  "Science and Natural Resources: Biology"
+    ]
+  },
+    {
+    "canonical": "Botany",
+    "variations": [
+      "Biology, Botany",
+      "Biology: Botany"
+    ]
+  },
+  {
+    "canonical": "Business Administration",
+    "variations": [
+      "Business Administration",
+      "Humboldt State University, Business Administration"
+    ]
+  },
+  {
+    "canonical": "Education",
+    "variations": [
+      "Education",
+      "Education: Administrative Services",
+	  "Education: Special Studies"
+    ]
+  },
+  {
+    "canonical": "Engineering & Community Practice",
+    "variations": [
+      "Engineering and Community Practice",
+      "Engineering & Community Practice"
+    ]
+  },
+    {
+    "canonical": "English",
+    "variations": [
+      "English",
+      "English, Composition Studies & Pedagogy",
+      "English, emphasis in Applied English Studies",
+	  "English, emphasis in Literary & Cultural Studies",
+	  "English, emphasis Peace Corps Service with TEFL",
+	  "English, Literature",
+	  "English: Composition Studies and Pedagogy",
+	  "English: Emphasis Peace Corps Service with TEFL",
+	  "English: Literary and Cultural Studies",
+	  "English: Literature",
+	  "English: Teaching of Writing",
+	  "English: Teaching Writing"
+    ]
+  },
+  {
+    "canonical": "Environment and Community",
+    "variations": [
+      "Environment and Community",
+      "Environment and Community Interdisciplinary Program",
+      "Socal Science, Environment and Community",
+	  "Social Science, Environment & Community",
+	  "Social Science, Environment and Community",
+	  "Social Science, Environment and Community Program",
+	  "Social Science: Environment & Community",
+	  "Social Science: Environment and Community",
+	  "Social Science: Environment and Community Program",
+	  "Social Sciences, Environment and Community",
+	  "Social Sciences, Environment and Community Program",
+	  "Social Sciences: Environment & Community",
+	  "Social Sciences: Environment and Community",
+	  "Social Sciences: Environment and Community Program",
+	  "Social Sciences: Environment and Community,2007"
+    ]
+  },
+  {
+    "canonical": "Environmental Resources Engineering",
+    "variations": [
+      "Environmental Resources Engineering",
+      "Environmental Systems, Environmental Resources Engineering",
+      "Environmental Systems, option Environmental Resources Engineering",
+	  "Environmental Systems: Engineering",
+	  "Environmental Systems: Environmental Resource Engineering",
+	  "Environmental Systems: Environmental Resources Engineering",
+	  "Environmental Systems: Environmental Resources Engineering Option"
+    ]
+  },
+  {
+    "canonical": "Environmental Science and Management",
+    "variations": [
+      "Environmental Science & Management",
+      "Environmental Science and Management",
+      "Natural Resources: option Environmental Science and Management"
+    ]
+  },
+  {
+    "canonical": "Environmental Systems",
+    "variations": [
+      "Environmental Resources Engineering, Energy, Technology, and Policy",
+      "Environmental Systems",
+      "Environmental Systems, Energy, Environment and Society",
+	  "Environmental Systems, option Energy, Technology, and Policy",
+	  "Environmental Systems, option Energy, Technology, and Policy",
+	  "Environmental Systems, option Energy, Technology, and Policy",
+	  "Environmental Systems: Energy Technology and Policy",
+	  "Environmental Systems: Energy Technology, and Policy",
+	  "Environmental Systems: Energy, Environment and Society",
+	  "Environmental Systems: Energy, Environment, and Society",
+	  "Environmental Systems: Energy, Environment, and Society Option",
+	  "Environmental Systems: Energy, Technology and Policy",
+	  "Environmental Systems: Energy, Technology, and Policy"
+    ]
+  },
+  {
+    "canonical": "Fisheries",
+    "variations": [
+      "Fisheries",
+      "Natural Resources (Fisheries)",
+      "Natural Resources, Fisheries",
+	  "Natural Resources, Fisheries Biology",
+	  "Natural Resources, Fisheries, Biology",
+	  "Natural Resources, option Fisheries",
+	  "Natural Resources: Fish Biology",
+	  "Natural Resources: Fisheries",
+	  "Natural Resources: Fisheries Biology",
+	  "Natural Resources: Fisheries Biology, Humboldt State University",
+	  "Natural Resources: Fisheries Science"
+    ]
+  },
+  {
+    "canonical": "Forestry",
+    "variations": [
+      "Forestry",
+      "Natural Resources Management, Forestry",
+      "Natural Resources, Forestry",
+	  "Natural Resources: Forestry"
+    ]
+  },
+  {
+    "canonical": "Geography",
+    "variations": [
+      "Social Science: Geography",
+      "Geography"
+    ]
+  },
+  {
+    "canonical": "Geology",
+    "variations": [
+      "Environmental Systems Graduate Group, Geology Option",
+      "Environmental Systems, Geology",
+      "Environmental Systems, option Geology",
+	  "Environmental Systems: Geology",
+	  "Environmental Systems: Geology Option",
+	  "Environmental Systems: Geology, Humboldt State University",
+	  "Geology",
+	  "Geology: Environmental Systems"
+    ]
+  },
+    {
+    "canonical": "Globalization",
+    "variations": [
+      "Globalization",
+      "Social Science: Globalization",
+      "Social Sciences: Globalization and the Environment"
+    ]
+  },
+  {
+    "canonical": "History",
+    "variations": [
+      "History"
+    ]
+  },
+  {
+    "canonical": "International Development Technology",
+    "variations": [
+      "Environmental Systems, International Development Technology",
+      "Environmental Systems: International Development and Technology",
+      "Environmental Systems: International Development Technology",
+	  "International Development Technology"
+    ]
+  },
+    {
+    "canonical": "Kinesiology",
+    "variations": [
+      "Kinesiology",
+      "Kinesiology Exercise Physiology",
+      "Kinesiology Exercise Science",
+	  "Kinesiology Teaching/Coaching",
+	  "Kinesiology, option Exercise Science",
+	  "Kinesiology, option Teaching/Coaching",
+	  "Kinesiology, Sports Medicine",
+	  "Kinesiology: Exercise Science",
+	  "Kinesiology: Exercise Science/Wellness Management",
+	  "Kinesiology: Sports Medicine",
+	  "Kinesiology: Teaching and Coaching",
+	  "Kinesiology: Teaching Coaching",
+	  "Kinesiology: Teaching/Coaching",
+	  "Kinesiology-Exercise Science"
+    ]
+  },
+    {
+    "canonical": "Mathematical Modeling",
+    "variations": [
+      "Environmental Systems, Mathematical Modeling",
+      "Environmental Systems, option Math Modeling",
+      "Environmental Systems: Math Modeling",
+	  "Environmental Systems: Mathematical Modeling",
+	  "Environmental Systems: Mathematics",
+	  "Master of Science In Environmental Systems: Mathematical Modeling"
+	  
+    ]
+  },
+  {
+    "canonical": "Natural Resources",
+    "variations": [
+      "Environmental and Natural Resource Sciences",
+      "Natural Recources",
+      "Natural Resources",
+	  "Natural Resources, option Forestry, Watershed, & Wildland Sciences",
+	  "Natural Resources: Environmental and Natural Resource Science",
+	  "Natural Resources: Environmental and Natural Resource Sciences",
+	  "Natural Resources: Environmental Studies",
+	  "Natural Resources: Forest, Watershed & Wildland Science",
+	  "Natural Resources: Forest, Watershed & Wildland Sciences",
+	  "Natural Resources: Forest, Watershed and Wildland Sciences",
+	  "Natural Resources: Forest, Watershed, & Wildland Sciences",
+	  "Natural Resources: Forest, Watershed, and Wildland Sciences",
+	  "Natural Resources: Forestry Watershed and Wildland Sciences",
+	  "Natural Resources: Forestry, Watershed & Wildland Sciences",
+	  "Natural Resources: Forestry, Watershed and Wildland Sciences",
+	  "Natural Resources: Forestry, Watershed and Wildland Studies",
+	  "Natural Resources: Forestry, Watershed, & Wildland Sciences",
+	  "Natural Resources: Forestry, Watershed, and Wildland Sciences"
+	  
+    ]
+  },
+  {
+    "canonical": "Natural Resources Planning and Interpretation",
+    "variations": [
+      "Environmental & Natural Resource Sciences: Natural Resources Planning and Interpretation",
+      "Natural Resource Planning and Interpretation",
+      "Natural Resources, Natural Resources Planning and Interpretation",
+	  "Natural Resources, Planning",
+	  "Natural Resources, Planning and Interpretation",
+	  "Natural Resources: Natural Resource Planning & Interpretation",
+	  "Natural Resources: Natural Resource Planning and Interpretation",
+	  "Natural Resources: Natural Resources Planning & Interpretation",
+	  "Natural Resources: Natural Resources Planning and Interpretation",
+	  "Natural Resources: Natural Resources Planning and Interpretation, emphasis GIS",
+	  "Natural Resources: Planning",
+	  "Natural Resources: Planning and Interpretation"
+    ]
+  },
+  {
+    "canonical": "Psychology",
+    "variations": [
+      "Academic Research",
+      "Academic Research: Biological Psychology",
+      "Clinical Psychology",
+	  "Counseling Psychology",
+	  "Counseling, Psychology",
+	  "Psychology",
+	  "Psychology (Counseling)",
+	  "Psychology (Counseling), Humboldt State University",
+	  "Psychology, Academic Research Option with Specialization in Behavior Analysis",
+	  "Psychology, Academic Research, Social and Environmental Psychology",
+	  "Psychology, Academic Research: Biological Psychology",
+	  "Psychology, Counseling",
+	  "Psychology, Counseling, Humboldt State University",
+	  "Psychology, option Academic Research",
+	  "Psychology, option Counseling",
+	  "Psychology, School Psychology",
+	  "Psychology: Academic Research",
+	  "Psychology: Academic Research, Biological Psychology",
+	  "Psychology: Academic Research, Developmental Psychopathology",
+	  "Psychology: Academic Research: Developmental Psychopathology",
+	  "Psychology: Counseling",
+	  "Psychology: Counseling, Humboldt State University",
+	  "Psychology: School Psychology"
+    ]
+  },
+  {
+    "canonical": "Rangeland Resources",
+    "variations": [
+      "Natural Resources, Rangeland Resources and Wildland Soils",
+      "Natural Resources: Rangeland Resources",
+      "Natural Resources: Wildland Soil Science"
+    ]
+  },
+    {
+    "canonical": "Social Science",
+    "variations": [
+      "Humboldt State Univesity, Social Science",
+      "Social Science",
+      "Social Sciences",
+      "Social Sciences: American Indian History"
+    ]
+  },
+    {
+    "canonical": "Social Work",
+    "variations": [
+      "Social Work"
+    ]
+  },
+    {
+    "canonical": "Sociology",
+    "variations": [
+      "Public Sociology",
+      "Research and Graduate Studies, Sociology",
+      "Sociology",
+      "Sociology, Humboldt State University",
+      "Sociology, Public and Teaching Emphasis",
+      "Sociology, Teaching Sociology",
+      "Sociology: Teaching Emphasis",
+      "Teaching Sociology"
+    ]
+  },
+    {
+    "canonical": "Teaching American History",
+    "variations": [
+      "American History",
+      "Emphasis in American History",
+      "History, Teaching of American History",
+      "Social Science, American History",
+      "Social Science, Emphasis - Teaching American History",
+      "Social Science, Emphasis in American History",
+      "Social Science, Emphasis in Teaching American History",
+      "Social Science, Emphasis, Teaching American History",
+      "Social Science, Teaching American History",
+      "Social Science: Emphasis in American History",
+      "Teaching American History"
+    ]
+  },
+    {
+    "canonical": "Theatre Arts",
+    "variations": [
+      "Theatre Arts"
+    ]
+  },
+    {
+    "canonical": "Wastewater Utilization",
+    "variations": [
+      "Fisheries: Wastewater Utilization",
+      "Natural Resources, Wastewater Utilization",
+      "Natural Resources, Wastewater Utilization Program",
+	  "Natural Resources: Wastewater Utilization Program"
+    ]
+  },
+    {
+    "canonical": "Watershed Management",
+    "variations": [
+      "Humboldt State University: In Natural Resources, Watershed Management",
+      "Natural Resources, Watershed Management",
+      "Natural Resources: Watershed Management",
+	  "Natural Resourcs: Watershed Management",
+	  "Watershed Management"
+    ]
+  },
+      {
+    "canonical": "Wildlife",
+    "variations": [
+      "Natural Resources, option Wildlife",
+      "Natural Resources, Wildlife",
+      "Natural Resources: Wildlife",
+	  "Natural Resources: Wildlife, Humboldt State University",
+	  "Wildlife"
+    ]
+  },
+      {
+    "canonical": "Wildlife Management",
+    "variations": [
+      "Natural Resources and Science: Wildlife Management",
+      "Natural Resources, Wildlife Management",
+      "Natural Resources: Wildlife Management",
+	  "Wildlife Management"
+    ]
+  }
+]
