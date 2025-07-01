@@ -1,14 +1,16 @@
 import { type Message } from '$lib/types/message';
 
 import { PUBLIC_BACKEND_URL } from '$env/static/public';
+import type { Tool } from '$lib/types/toolCall';
 
 export const sendMessages = async (
-	messages: Message[],
+	messages: (Message | Tool)[],
 	chatId: number,
 	fns: {
 		onStart: () => void;
 		onUpdateContent: (delta: string) => void;
 		onUpdateReasoning: (delta: string) => void;
+		onToolCall: (toolCall: Tool) => void;
 		onFinish: (response: string) => void;
 		onError: (error: string) => void;
 	}
@@ -68,6 +70,25 @@ export const sendMessages = async (
 						fns.onUpdateReasoning(reasoningDelta);
 					} catch (error) {
 						console.error('Error parsing reasoning:', error);
+					}
+				} else if (eventType === 'tool_call') {
+					try {
+						const dataObj = JSON.parse(data);
+						if (
+							!Object.hasOwn(dataObj, 'id') ||
+							!Object.hasOwn(dataObj, 'name') ||
+							!Object.hasOwn(dataObj, 'kwargs')
+						) {
+							throw new Error('Tool call data is missing required properties');
+						}
+						const toolCall: Tool = {
+							id: dataObj.id,
+							name: dataObj.name,
+							kwargs: dataObj.kwargs
+						};
+						fns.onToolCall(toolCall);
+					} catch (error) {
+						console.error('Error parsing tool call:', error);
 					}
 				} else if (eventType === 'response') {
 					try {

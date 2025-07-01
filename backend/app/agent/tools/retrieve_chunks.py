@@ -16,6 +16,7 @@ from llama_index.core.schema import MetadataMode
 from llama_index.core.llms import LLM
 from llama_index.llms.openrouter import OpenRouter
 from llama_index.core.tools import FunctionTool
+from pydantic import BaseModel
 
 from app.agent.utils import Source
 
@@ -127,7 +128,6 @@ async def retrieve_chunks(
                 doc_id=node.node_id,
                 content=node.get_content(metadata_mode=MetadataMode.LLM),
             )
-
     except Exception as e:
         raise
 

@@ -95,8 +95,13 @@
 	}
 </script>
 
-<div class="w-max max-w-[75%] px-3">
+<div class="w-[75%] px-3">
 	<div class="">
+		<div class="mb-3 flex flex-col gap-1">
+			{#each message.toolCalls as toolCall (toolCall.id)}
+				<ToolCall {toolCall} />
+			{/each}
+		</div>
 		{#if message.status === MessageStatus.Started || isTyping}
 			<div
 				use:markdown={messageContent}

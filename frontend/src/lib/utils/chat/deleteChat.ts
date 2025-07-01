@@ -17,7 +17,7 @@ export async function deleteChat(chatId: number): Promise<void> {
 	if (currentPath.includes(`/chat/${chatId}`)) {
 		console.log('Redirecting to home page after chat deletion');
 		// Redirect to the home page if the current chat is deleted
-		await goto('/');
+		await goto('/chat');
 	}
 
 	await invalidateAll();

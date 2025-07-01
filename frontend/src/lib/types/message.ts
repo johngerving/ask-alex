@@ -1,8 +1,10 @@
 import type { v4 } from 'uuid';
+import type { Tool } from '$lib/types/toolCall';
 
 export type Message = {
 	role: 'user' | 'assistant';
 	reasoning: string;
+	toolCalls: Tool[];
 	content: string;
 	id: string;
 	status: MessageStatus;

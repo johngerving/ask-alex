@@ -2,6 +2,7 @@
 	import Messages from '$lib/components/chat/messages.svelte';
 	import MessageInput from '$lib/components/chat/message-input.svelte';
 	import type { Message } from '$lib/types/message';
+	import type { Tool } from '$lib/types/toolCall';
 
 	let { chatId, chatHistory = $bindable() }: { chatId: number; chatHistory: Message[] } = $props();
 </script>

@@ -8,12 +8,12 @@ from llama_index.core.memory import Memory
 from llama_index.core.workflow.context import Context
 from sse_starlette import EventSourceResponse
 from pydantic import BaseModel
-from app.agent.agent import Agent, StreamEvent
+from app.agent.agent import Agent, FinalAnswerEvent, StreamEvent
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.base.llms.types import ChatResponse
 from llama_index.core.workflow import JsonSerializer, JsonPickleSerializer
-from llama_index.core.agent.workflow import AgentStream
-from llama_index.llms.openai.utils import OpenAIToolCall
+from llama_index.core.agent.workflow import AgentStream, ToolCall
+from openai.types.chat import ChatCompletionMessageToolCall
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from langfuse import get_client
 import json
@@ -130,13 +130,17 @@ async def get_chat(chat_id: int, request: Request):
                 RequestMessage(content=msg.content or "", role="user")
             )
         elif msg.role == MessageRole.ASSISTANT:
-            print(msg.model_dump())
-            chat_response = ChatResponse(message=msg)
             tool_calls = msg.additional_kwargs.get("tool_calls", [])
 
-            # if tool_calls:
-            #     print("Tool call type:", tool_calls[0])
-            # print("Chat response:", chat_response.model_dump())
+            # Convert tool call dicts to ChatCompletionMessageToolCall objects
+            # This is a workaround for a bug in LlamaIndex
+            tool_calls = [
+                ChatCompletionMessageToolCall(**tool_call) for tool_call in tool_calls
+            ]
+            msg.additional_kwargs["tool_calls"] = tool_calls
+
+            chat_response = ChatResponse(message=msg)
+
             tool_calls = w.tool_llm.get_tool_calls_from_response(
                 chat_response, error_on_no_tool_call=False
             )
@@ -144,15 +148,19 @@ async def get_chat(chat_id: int, request: Request):
             for tool_call in tool_calls:
                 display_history.append(
                     RequestToolCall(
+                        id=tool_call.tool_id,
                         name=tool_call.tool_name,
                         kwargs=tool_call.tool_kwargs or {},
                     )
                 )
 
             formatted_content = generate_citations(retrieved_sources, msg.content or "")
-            display_history.append(
-                RequestMessage(content=formatted_content, role="assistant")
-            )
+
+            # Only display the message if it has content and display is not set to False
+            if msg.content and msg.additional_kwargs.get("display", True):
+                display_history.append(
+                    RequestMessage(content=formatted_content, role="assistant")
+                )
 
     return display_history
 
@@ -165,6 +173,7 @@ class RequestMessage(BaseModel):
 
 class RequestToolCall(BaseModel):
     type: str = "tool_call"
+    id: str
     name: str
     kwargs: dict
 
@@ -246,6 +255,22 @@ async def run(request: Request) -> EventSourceResponse:
                             "event": "delta",
                             "data": format_event(ev.delta),
                         }
+                    elif isinstance(ev, ToolCall):
+                        yield {
+                            "event": "tool_call",
+                            "data": json.dumps(
+                                {
+                                    "id": ev.tool_id,
+                                    "name": ev.tool_name,
+                                    "kwargs": ev.tool_kwargs,
+                                }
+                            ),
+                        }
+                    elif isinstance(ev, FinalAnswerEvent):
+                        yield {
+                            "event": "response",
+                            "data": format_event(ev.content),
+                        }
                     else:
                         # logger.info(f"Event: {ev}")
                         pass
@@ -253,11 +278,7 @@ async def run(request: Request) -> EventSourceResponse:
                 logger.info(f"Got to end of event stream")
 
                 # Get the final response from the workflow
-                result = await handler
-                logger.info(f"Result: {result}")
-
-                # Stream the final response to the client
-                yield {"event": "response", "data": format_event(str(result))}
+                await handler
 
                 try:
                     chat_store.set_context(chat.id, ctx, user)

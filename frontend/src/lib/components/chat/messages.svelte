@@ -3,6 +3,8 @@
 	import { ChatBubble } from '$lib/components/ui/chatbubble';
 	import type { Message } from '$lib/types/message';
 	import { scrollToBottom } from '$lib/utils/chat/scrollToBottom';
+	import ToolCall from '$lib/components/ui/toolcall/toolcall.svelte';
+	import type { Tool } from '$lib/types/toolCall';
 
 	let { chatHistory }: { chatHistory: Message[] } = $props();
 

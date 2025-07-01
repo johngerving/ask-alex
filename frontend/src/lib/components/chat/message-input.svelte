@@ -4,19 +4,21 @@
 
 	import { Button } from '$lib/components/ui/button';
 	import { ChatTextarea } from '$lib/components/ui/chattextarea';
-	import MaterialSymbolsSendOutlineRounded from '~icons/material-symbols/send-outline-rounded';
 	import MaterialSymbolsArrowUpwardRounded from '~icons/material-symbols/arrow-upward-rounded';
+	import MaterialSymbolsStop from '~icons/material-symbols/stop';
 	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
 	import { v4 } from 'uuid';
 	import { invalidateAll } from '$app/navigation';
+	import type { Tool } from '$lib/types/toolCall';
 
 	let { chatId, chatHistory = $bindable() }: { chatId: number; chatHistory: Message[] } = $props();
 
 	let text = $state('');
 
 	// Disable the submit button if there is no message content
-	let sendDisabled: boolean = $derived(text.length == 0);
+	let messageEmpty: boolean = $derived(text.length == 0);
+	let messageInProgress: boolean = $derived(false);
 
 	function handleOnKeyDown(e: KeyboardEvent) {
 		// Send the message if the user presses enter but is not pressing shift.
@@ -31,29 +33,13 @@
 		let userMessageId = v4();
 		let assistantMessageId = v4();
 
-		// Add a message
-		// messageStore.createMessage({
-		// 	content: text,
-		// 	reasoning: '',
-		// 	role: 'user',
-		// 	id: userMessageId,
-		// 	status: MessageStatus.Finished
-		// });
-
-		console.log('Sending message:', text);
-		// chatHistory.push({
-		// 	id: userMessageId,
-		// 	content: text,
-		// 	reasoning: '',
-		// 	role: 'user',
-		// 	status: MessageStatus.Finished
-		// });
 		chatHistory = [
 			...chatHistory,
 			{
 				id: userMessageId,
 				content: text,
 				reasoning: '',
+				toolCalls: [],
 				role: 'user',
 				status: MessageStatus.Finished
 			}
@@ -61,12 +47,15 @@
 
 		sendMessages(chatHistory, chatId, {
 			onStart: () => {
+				messageInProgress = true;
+
 				chatHistory = [
 					...chatHistory,
 					{
 						id: assistantMessageId,
 						content: '',
 						reasoning: '',
+						toolCalls: [],
 						role: 'assistant',
 						status: MessageStatus.Started
 					}
@@ -94,7 +83,20 @@
 					return message;
 				});
 			},
+			onToolCall: (toolCall: Tool) => {
+				chatHistory = chatHistory.map((message) => {
+					if (message.id === assistantMessageId) {
+						return {
+							...message,
+							toolCalls: [...message.toolCalls, toolCall]
+						};
+					}
+					return message;
+				});
+			},
 			onFinish: (response: string) => {
+				messageInProgress = false;
+
 				chatHistory = chatHistory.map((message) => {
 					if (message.id === assistantMessageId) {
 						return {
@@ -109,6 +111,8 @@
 				invalidateAll(); // Invalidate all data to refresh the chat history
 			},
 			onError: (error: string) => {
+				messageInProgress = false;
+
 				console.error(error);
 				chatHistory = chatHistory.map((message) => {
 					if (message.id === assistantMessageId) {
@@ -137,7 +141,7 @@
 	/>
 	<Button
 		type="submit"
-		disabled={sendDisabled}
+		disabled={messageEmpty || messageInProgress}
 		class="relative h-11 w-11 overflow-hidden rounded-full transition-all"
 	>
 		<MaterialSymbolsArrowUpwardRounded class="absolute h-3/4 w-3/4 text-xl" />
