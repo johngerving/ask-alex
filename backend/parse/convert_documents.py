@@ -47,21 +47,22 @@ class Converter:
     def __call__(self, input_batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         print(f'Processing batch of size {len(input_batch["link"])}')
 
-        documents: List[DoclingDocument] = []
+        documents: List[str] = []
+        statuses: List[str] = []
         with psycopg.connect(os.getenv("PG_CONN_STR")) as conn:
             with conn.cursor() as cur:
-                for link in input_batch["link"]:
+                for link, metadata in zip(input_batch["link"], input_batch["metadata"]):
                     # Check if document already exists in the database
                     cur.execute(
                         "SELECT document FROM documents WHERE link = %s", (link,)
                     )
                     row = cur.fetchone()
 
-                    doc = None
+                    li_doc = None
                     if row is not None:
                         existing_doc = row[0]
                         li_doc = LIDocument.from_dict(existing_doc)
-                        doc = DoclingDocument.model_validate_json(li_doc.get_content())
+                        li_doc.metadata = json.loads(metadata)
                     else:
                         # If the document does not exist, we will convert it
                         try:
@@ -76,42 +77,25 @@ class Converter:
                             if result.status == ConversionStatus.FAILURE:
                                 raise Exception(f"{result.errors}")
 
-                            doc = result.document
+                            dl_doc = result.document
+
+                            text = json.dumps(dl_doc.export_to_dict())
+
+                            metadata: Dict[Any, Any] = json.loads(metadata)
+
+                            li_doc = LIDocument(
+                                doc_id=str(uuid.uuid4()),
+                                text=text,
+                                metadata=metadata,
+                            )
+
                         except Exception as e:
                             self.logger.error(f"Error converting document {link}: {e}")
 
-                    documents.append(doc)
+                    statuses.append("success" if li_doc else "failure")
+                    documents.append(json.dumps(li_doc.to_dict() if li_doc else None))
 
-        json_docs = []
-        statuses = []
-
-        # Loop through the conversion results
-        for link, metadata, dl_doc in zip(
-            input_batch["link"], input_batch["metadata"], documents
-        ):
-            json_doc = None
-            if dl_doc is not None:
-                # Get the document content and create a LlamaIndex document with it
-                text = json.dumps(dl_doc.export_to_dict())
-
-                metadata: Dict[Any, Any] = json.loads(metadata)
-
-                li_doc = LIDocument(
-                    doc_id=str(uuid.uuid4()),
-                    text=text,
-                    metadata=metadata,
-                )
-                # Convert our document to a dictionary to store as text
-                json_doc = json.dumps(li_doc.to_dict())
-
-            json_docs.append(json_doc)
-            statuses.append("success" if json_doc is not None else "failure")
-
-        return {
-            "link": input_batch["link"],
-            "status": statuses,
-            "document": json_docs,
-        }
+        return {"link": input_batch["link"], "status": statuses, "document": documents}
 
 
 def is_successful(row: Dict[str, Any]) -> bool:
@@ -146,6 +130,14 @@ def convert_documents():
 
     ds = dataset_from_digitalcommons()
 
+    old_ds = ray.data.read_sql(
+        "SELECT link FROM documents",
+        lambda: psycopg.connect(conn_str),
+    )
+
+    # Remove old documents that are no longer present in the Digital Commons dataset
+    remove_old_documents(ds, old_ds)
+
     # Convert PDFs to markdown documents
     ds = ds.map_batches(
         Converter,
@@ -165,3 +157,24 @@ def convert_documents():
     )
 
     ds.count()
+
+
+def remove_old_documents(new_ds: ray.data.Dataset, old_ds: ray.data.Dataset) -> None:
+    """
+    Removes documents that are no longer present in the Digital Commons dataset.
+    """
+    old_links = old_ds.join(
+        new_ds,
+        join_type="left_outer",
+        on=("link",),
+        num_partitions=8,
+    )
+
+    filtered = old_links.filter(lambda row: row["metadata"] is None).take_all()
+
+    with psycopg.connect(os.getenv("PG_CONN_STR"), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "DELETE FROM documents WHERE link = %s",
+                [(row["link"],) for row in filtered],
+            )

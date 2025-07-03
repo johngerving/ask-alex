@@ -44,6 +44,7 @@ from app.agent.tools import (
     handoff_to_writer,
     search_documents,
     retrieve_chunks,
+    call_metadata_agent,
 )
 
 
@@ -249,6 +250,7 @@ class Agent(Workflow):
             system_prompt=RETRIEVAL_AGENT_PROMPT,
             tools=[
                 retrieve_chunks,
+                call_metadata_agent,
                 search_documents,
                 handoff_to_writer,
             ],

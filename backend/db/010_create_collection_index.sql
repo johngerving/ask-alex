@@ -1,4 +1,4 @@
-CREATE INDEX documents_metadata_collection_idx ON documents USING gin ((document->'metadata'->'collection'));
+CREATE INDEX documents_metadata_collection_idx ON documents ((document->'metadata'->>'collection'));
 
 ---- create above / drop below ----
 

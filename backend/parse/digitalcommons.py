@@ -1,18 +1,13 @@
 import json
 import os
-
 from typing import Any, Dict, List
-
 import requests
 from requests.adapters import HTTPAdapter, Retry
-
-import numpy as np
-import pandas as pd
-
 import ray
 import ray.data
-
 import logging
+from datetime import datetime
+from dateutil import parser
 
 from metadata_mapping.get_department_mappings import get_department_mappings
 
@@ -88,6 +83,12 @@ def dataset_from_digitalcommons() -> ray.data.Dataset:
 
             metadata = clean_metadata(result)
 
+            if not isinstance(metadata.get("publication_date"), int):
+                print(
+                    "Error: publication_date is not an integer, instead it is: ",
+                    metadata.get("publication_date"),
+                )
+
             ds_items.append(
                 {
                     "link": result["download_link"],
@@ -153,5 +154,23 @@ def clean_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
         department_mappings[dept] if dept in department_mappings else dept
         for dept in departments
     ]
+
+    # Get rid of "Other" department name
+    metadata["department"] = [
+        dept for dept in metadata["department"] if dept.lower() != "other"
+    ]
+
+    # Convert date from string to year
+    if "publication_date" in metadata and isinstance(metadata["publication_date"], str):
+        try:
+            # Convert timestamp to datetime object
+            dt = parser.isoparse(metadata["publication_date"])
+            # Extract the year from the datetime object
+            metadata["publication_date"] = dt.year
+        except ValueError as e:
+            metadata["publication_date"] = None
+            print(e)
+    else:
+        metadata["publication_date"] = None
 
     return metadata
