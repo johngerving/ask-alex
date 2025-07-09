@@ -1,4 +1,5 @@
 import logging
+import re
 import psycopg
 from psycopg.types.json import Jsonb
 import ray
@@ -92,6 +93,11 @@ class Converter:
                         except Exception as e:
                             self.logger.error(f"Error converting document {link}: {e}")
 
+                    if li_doc:
+                        li_doc.set_content(li_doc.text.replace("\x00", ""))
+                        li_doc.set_content(li_doc.text.replace("\\u0000", ""))
+                        li_doc.set_content(re.sub(r"/\s\s+/g", " ", li_doc.text))
+
                     statuses.append("success" if li_doc else "failure")
                     documents.append(json.dumps(li_doc.to_dict() if li_doc else None))
 
@@ -102,16 +108,34 @@ def is_successful(row: Dict[str, Any]) -> bool:
     return row["status"] == "success"
 
 
+class ExtractTextContent:
+    def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        """
+        Extracts text content from the documents in the batch.
+        """
+        documents = [LIDocument.from_dict(json.loads(doc)) for doc in batch["document"]]
+
+        dl_docs = [DoclingDocument.model_validate_json(doc.text) for doc in documents]
+
+        texts = [dl_doc.export_to_markdown() for dl_doc in dl_docs]
+
+        return {
+            "link": batch["link"],
+            "document": batch["document"],
+            "text": texts,
+        }
+
+
 class SaveDocuments:
     def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         documents_dict = [Jsonb(json.loads(doc)) for doc in batch["document"]]
 
-        values = zip(batch["link"], documents_dict)
+        values = zip(batch["link"], documents_dict, batch["text"])
         with psycopg.connect(os.getenv("PG_CONN_STR"), autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.executemany(
-                    "INSERT INTO documents (link, document) VALUES (%s, %s) ON CONFLICT (link) DO UPDATE SET document = EXCLUDED.document",
-                    [(link, doc) for link, doc in values],
+                    "INSERT INTO documents (link, document, text) VALUES (%s, %s, %s) ON CONFLICT (link) DO UPDATE SET document = EXCLUDED.document, text = EXCLUDED.text",
+                    [(link, doc, text) for link, doc, text in values],
                 )
         return batch
 
@@ -148,6 +172,13 @@ def convert_documents():
     )
 
     ds = ds.filter(fn=is_successful)
+
+    ds = ds.map_batches(
+        ExtractTextContent,
+        batch_size=128,
+        num_cpus=1,
+        concurrency=8,
+    )
 
     ds = ds.map_batches(
         SaveDocuments,

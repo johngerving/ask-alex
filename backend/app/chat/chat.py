@@ -20,7 +20,7 @@ import json
 import logging
 
 from app.user_store.store import User
-from app.agent.utils import Source, filter_writer_handoff, generate_citations
+from app.agent.utils import Source, generate_citations
 
 load_dotenv()
 
@@ -110,7 +110,6 @@ async def get_chat(chat_id: int, request: Request):
     )
 
     chat_history = await memory.aget_all()
-    chat_history = filter_writer_handoff(chat_history)
 
     chat = chat_store.find_by_id(chat_id, user)
     w = Agent(logger=None)
@@ -125,42 +124,46 @@ async def get_chat(chat_id: int, request: Request):
     display_history: List[RequestMessage | RequestToolCall] = []
 
     for msg in chat_history:
-        if msg.role == MessageRole.USER:
-            display_history.append(
-                RequestMessage(content=msg.content or "", role="user")
-            )
-        elif msg.role == MessageRole.ASSISTANT:
-            tool_calls = msg.additional_kwargs.get("tool_calls", [])
-
-            # Convert tool call dicts to ChatCompletionMessageToolCall objects
-            # This is a workaround for a bug in LlamaIndex
-            tool_calls = [
-                ChatCompletionMessageToolCall(**tool_call) for tool_call in tool_calls
-            ]
-            msg.additional_kwargs["tool_calls"] = tool_calls
-
-            chat_response = ChatResponse(message=msg)
-
-            tool_calls = w.tool_llm.get_tool_calls_from_response(
-                chat_response, error_on_no_tool_call=False
-            )
-
-            for tool_call in tool_calls:
+        if msg.additional_kwargs.get("display", True):
+            if msg.role == MessageRole.USER:
                 display_history.append(
-                    RequestToolCall(
-                        id=tool_call.tool_id,
-                        name=tool_call.tool_name,
-                        kwargs=tool_call.tool_kwargs or {},
+                    RequestMessage(content=msg.content or "", role="user")
+                )
+            elif msg.role == MessageRole.ASSISTANT:
+                tool_calls = msg.additional_kwargs.get("tool_calls", [])
+
+                # Convert tool call dicts to ChatCompletionMessageToolCall objects
+                # This is a workaround for a bug in LlamaIndex
+                tool_calls = [
+                    ChatCompletionMessageToolCall(**tool_call)
+                    for tool_call in tool_calls
+                ]
+                msg.additional_kwargs["tool_calls"] = tool_calls
+
+                chat_response = ChatResponse(message=msg)
+
+                tool_calls = w.tool_llm.get_tool_calls_from_response(
+                    chat_response, error_on_no_tool_call=False
+                )
+
+                for tool_call in tool_calls:
+                    display_history.append(
+                        RequestToolCall(
+                            id=tool_call.tool_id,
+                            name=tool_call.tool_name,
+                            kwargs=tool_call.tool_kwargs or {},
+                        )
                     )
+
+                formatted_content = generate_citations(
+                    retrieved_sources, msg.content or ""
                 )
 
-            formatted_content = generate_citations(retrieved_sources, msg.content or "")
-
-            # Only display the message if it has content and display is not set to False
-            if msg.content and msg.additional_kwargs.get("display", True):
-                display_history.append(
-                    RequestMessage(content=formatted_content, role="assistant")
-                )
+                # Only display the message if it has content and display is not set to False
+                if msg.content:
+                    display_history.append(
+                        RequestMessage(content=formatted_content, role="assistant")
+                    )
 
     return display_history
 
@@ -223,7 +226,7 @@ async def run(request: Request) -> EventSourceResponse:
     message = messages[-1]
 
     async def event_generator():
-        workflow = Agent(logger=logger, timeout=120, verbose=True)
+        workflow = Agent(logger=logger, timeout=180, verbose=True)
 
         chat = chat_store.find_by_id(body.chatId, user)
 

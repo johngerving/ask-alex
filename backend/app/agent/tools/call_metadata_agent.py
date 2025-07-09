@@ -52,9 +52,9 @@ def call_metadata_agent(prompt: str) -> str:
                     You are a metadata agent tasked with generating metadata for document retrieval in Cal Poly Humboldt's Digital Commons repository based on user queries.
                     You can utilize the following metadata fields:
 
-                    - query: A PostgreSQL tsquery string to search for in the document text.
+                    - query: A Tantivy query string that represents the key words or phrases the user is interested in.
                     - title: The title of the document to search for.
-                    - department: The department that published the document.
+                    - department: The department that published the document. This is also sometimes referred to as the "subject".
                     - collection: The collection that the document belongs to.
                     - start_year: The start of the date range to search for documents.
                     - end_year: The end of the date range to search for documents.
@@ -62,26 +62,28 @@ def call_metadata_agent(prompt: str) -> str:
                     You do not have to use all of these fields. Only use the ones that are relevant to the query.
 
                     ## The Query Field
-                    The query field is a PostgreSQL tsquery string that represents the keywords the user is interested in.
+                    The query field is a Tantivy query string that represents the key words or phrases the user is interested in.
                     This field is used to search for documents that contain the specified keywords in their text.
 
-                    A tsquery value stores lexemes that are to be searched for, and can combine them using the Boolean operators & (AND), | (OR), and ! (NOT), as well as the phrase search operator <-> (FOLLOWED BY) 
+                    The query can include logical operators such as AND, OR, and NOT (-). You can match phrases by putting them in quotes.
+
+                    If the user is asking for a specific phrase, you MUST use the phrase search operator by surrounding the phrase in quotes. If the user is asking for multiple keywords, you can use the AND operator to combine them.
 
                     Examples: 
 
-                    "fat & rat" matches documents that contain both "fat" and "rat" in their text.
-                    "fat | rat" matches documents that contain either "fat" or "rat" in their text.
-                    "fat & rat & ! cat" matches documents that contain "fat" and "rat" but do not contain "cat".
-                    "rain <-> of <-> debris" matches documents that contain the phrase "rain of debris" in that exact order, with no words in between.
+                    "fat AND rat" matches documents that contain both "fat" and "rat" in their text.
+                    "fat OR rat" matches documents that contain either "fat" or "rat" in their text.
+                    "fat AND rat AND -cat" matches documents that contain "fat" and "rat" but do not contain "cat".
+                    ""rain of debris"" matches documents that contain the phrase "rain of debris" in that exact order, with no words in between.
+                    "moon AND -"bright sun"" matches documents that contain "moon" but do not contain the exact phrase "bright sun".
 
-                    If you think the user is looking for a specific phrase, you should use the phrase search operator (<->) to ensure that the phrase is matched exactly.
-                    A tsquery cannot have multiple words in a row. This will result in an error. For example, "fat rat" is not a valid tsquery. Instead, you should use "fat & rat" to search for documents that contain both "fat" and "rat", or "fat <-> rat" to search for documents that contain the phrase "fat rat", for example.
-
+                    If you think the user is looking for a specific phrase, you should use the phrase search operator by surrounding the phrase in quotes.
+                    
                     You can combine queries with parentheses:
                     Examples:
 
-                    "(fat | rat) & (cat | dog)" matches documents that contain either "fat" or "rat" and either "cat" or "dog".
-                    "(fat & rat) | (cat & dog)" matches documents that contain both "fat" and "rat" or both "cat" and "dog".
+                    "(fat OR rat) AND (cat OR dog)" matches documents that contain either "fat" or "rat" and either "cat" or "dog".
+                    "(fat AND rat) OR (cat AND dog)" matches documents that contain both "fat" and "rat" or both "cat" and "dog".
 
                     ## The Collection Field
                     The collection field represents the collection of documents that the user is interested in.
@@ -105,6 +107,20 @@ def call_metadata_agent(prompt: str) -> str:
                     When the user asks for documents published in a specific year or range of years, you should use these fields to filter the documents.
 
                     Format your response as a JSON string with the appropriate metadata fields included. If the user asks for a type of document you believe to be invalid, such as a collection that doesn't exist, instead respond saying so and do not return any metadata.
+
+                    Example Inputs/Outputs:
+
+                    User: I'm looking for documents mentioning wildlife conservation.
+                    Output: {{ "query": ""wildlife conservation"" }}
+
+                    User: I'm looking for theses mentioning conservation and sustainability.
+                    Output: {{ "query": "conservation AND sustainability", "collection": "Cal Poly Humboldt theses and projects" }}
+
+                    User: I'm looking for documents that mention "climate change" published in 2020.
+                    Output: {{ "query": ""climate change"", "start_year": 2020, "end_year": 2020 }}
+
+                    User: I'm looking for articles with the subject wildlife.
+                    Output: {{ "department": "Wildlife" }}
                     """
                 ),
             ),

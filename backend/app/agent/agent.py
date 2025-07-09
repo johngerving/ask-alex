@@ -43,10 +43,11 @@ from llama_index.core.memory import Memory
 from app.agent.tools import (
     handoff_to_writer,
     search_documents,
-    retrieve_chunks,
+    analyze_documents,
+    query_knowledge_base,
     call_metadata_agent,
 )
-
+from app.agent.retrieval_agent import RetrievalAgent
 
 from .prompts import (
     CHAT_AGENT_PROMPT,
@@ -58,7 +59,6 @@ from .utils import (
     Source,
     filter_tool_calls,
     filter_tool_results,
-    filter_writer_handoff,
     generate_citations,
     remove_citations,
 )
@@ -135,7 +135,7 @@ class Agent(Workflow):
         )
 
         self.tool_llm = OpenRouter(
-            model="qwen/qwen3-32b",
+            model="qwen/qwen3-235b-a22b",
             api_key=os.getenv("OPENROUTER_API_KEY"),
             context_window=41000,
             max_tokens=4000,
@@ -245,13 +245,14 @@ class Agent(Workflow):
         memory: Memory = await ctx.get("memory")
         history = await memory.aget()
 
-        agent = FunctionAgent(
+        agent = RetrievalAgent(
             llm=self.tool_llm,
             system_prompt=RETRIEVAL_AGENT_PROMPT,
             tools=[
-                retrieve_chunks,
+                query_knowledge_base,
                 call_metadata_agent,
                 search_documents,
+                analyze_documents,
                 handoff_to_writer,
             ],
         )
@@ -271,12 +272,44 @@ class Agent(Workflow):
             if isinstance(ev, AgentStream):
                 print(ev.delta, end="", flush=True)
             if isinstance(ev, ToolCall):
+                print(f"Tool call: {ev.tool_name}{ev.tool_kwargs}")
                 if ev.tool_name != "handoff_to_writer":
                     ctx.write_event_to_stream(ev)
 
-                print(f"Tool call: {ev.tool_name}{ev.tool_kwargs}")
-
         result = str(await handler)
+
+        # agent = FunctionAgent(
+        #     llm=self.tool_llm,
+        #     system_prompt=RETRIEVAL_AGENT_PROMPT,
+        #     tools=[
+        #         query_knowledge_base,
+        #         call_metadata_agent,
+        #         search_documents,
+        #         analyze_document,
+        #         handoff_to_writer,
+        #     ],
+        # )
+
+        # workflow = AgentWorkflow(
+        #     agents=[agent],
+        # )
+
+        # # Use the current memory as the initial memory for the retrieval agent
+        # handler = workflow.run(
+        #     chat_history=history,
+        #     memory=memory,
+        # )
+
+        # # Pass events from retrieval agent along
+        # async for ev in handler.stream_events():
+        #     if isinstance(ev, AgentStream):
+        #         print(ev.delta, end="", flush=True)
+        #     if isinstance(ev, ToolCall):
+        #         print(f"Tool call: {ev.tool_name}{ev.tool_kwargs}")
+        #         if ev.tool_name != "handoff_to_writer":
+        #             ctx.write_event_to_stream(ev)
+
+        # result = str(await handler)
 
         print("Result:", result)
 
@@ -294,8 +327,8 @@ class Agent(Workflow):
             return WriteFinalAnswerEvent()
         else:
             msg = ChatMessage(
-                role=MessageRole.ASSISTANT,
-                content="I have to call at least one tool. I can either hand over control with the handoff_to_writer tool, or I can retrieve more information.",
+                role=MessageRole.USER,
+                content="<agent_reminder>You must call at least one tool. You can either hand over control with the handoff_to_writer tool, or you can retrieve more information.</agent_reminder>",
                 additional_kwargs={
                     "display": False,  # Do not display this message in the chat
                 },
@@ -310,17 +343,58 @@ class Agent(Workflow):
     ) -> GenerateTitleEvent:
         """Write the final answer using the writer agent."""
 
-        memory: Memory = await ctx.get("memory")
-        chat_history = await memory.aget()
-        chat_history = filter_writer_handoff(chat_history)
+        full_memory: Memory = await ctx.get("memory")
+        full_history = await full_memory.aget_all()
 
         system_message = ChatMessage(
             role="system",
             content=FINAL_ANSWER_PROMPT,
         )
 
+        chat_history: List[ChatMessage] = [system_message]
+
+        memory_str = ""
+
+        for message in full_history:
+            if message.additional_kwargs.get("display", True):
+                if message.role == MessageRole.ASSISTANT:
+                    if message.additional_kwargs.get(
+                        "tool_calls"
+                    ) is not None and isinstance(
+                        message.additional_kwargs["tool_calls"], list
+                    ):
+                        tool_calls = message.additional_kwargs.get("tool_calls", [])
+                        try:
+                            if not any(
+                                tool_call["function"]["name"] == "handoff_to_writer"
+                                for tool_call in tool_calls
+                            ):
+                                kwargs = {
+                                    "tool_calls": message.additional_kwargs[
+                                        "tool_calls"
+                                    ]
+                                }
+                                memory_str += f"{kwargs}\n"
+                        except Exception:
+                            pass
+                    else:
+                        memory_str += f"<message role={message.role}>\n"
+                        memory_str += f"{message.content}\n"
+                        memory_str += "</message>\n"
+                else:
+                    if not "handoff_to_writer" in message.content:
+                        memory_str += f"<message role={message.role}>\n"
+                        memory_str += f"{message.content}\n"
+                        memory_str += "</message>\n"
+        chat_history.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content=memory_str,
+            )
+        )
+
         response_stream = await self.writer_llm.astream_chat(
-            messages=[system_message, *chat_history],
+            messages=chat_history,
         )
 
         # Parse citations in the response
@@ -372,8 +446,8 @@ class Agent(Workflow):
         if not response.message.content:
             raise Exception("No response from agent")
 
-        await memory.aput(response.message)
-        await ctx.set("memory", memory)
+        await full_memory.aput(response.message)
+        await ctx.set("memory", full_memory)
 
         retrieved_sources: List[Source] = await ctx.get("retrieved_sources", [])
         final_formatted_response = generate_citations(

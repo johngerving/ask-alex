@@ -66,29 +66,3 @@ def filter_tool_calls(chat_history: List[ChatMessage]) -> List[ChatMessage]:
         msg.additional_kwargs.pop("tool_calls", None)
 
     return new_history
-
-
-def filter_writer_handoff(chat_history: List[ChatMessage]) -> List[ChatMessage]:
-    """Filter to exclude writer handoff messages from the chat history."""
-
-    new_history = []
-
-    for msg in chat_history:
-        if msg.content == "handoff_to_writer":
-            continue
-
-        if msg.role == MessageRole.ASSISTANT:
-            tool_calls = msg.additional_kwargs.get("tool_calls", [])
-
-            try:
-                if any(
-                    tool_call["function"]["name"] == "handoff_to_writer"
-                    for tool_call in tool_calls
-                ):
-                    continue
-            except Exception as e:
-                print(f"Error checking tool calls: {e}")
-
-        new_history.append(msg)
-
-    return new_history

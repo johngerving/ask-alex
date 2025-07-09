@@ -9,10 +9,13 @@ ON CONFLICT DO NOTHING;
 -- Maintenance trigger
 CREATE OR REPLACE FUNCTION upd_departments_distinct() RETURNS trigger AS $$
 BEGIN
-    INSERT INTO departments_distinct (department)
-    VALUES (unnest(JSONB_ARRAY_ELEMENTS(NEW.document->'metadata'->'department')))
-    ON CONFLICT DO NOTHING;      -- ignore duplicates
-    RETURN NULL;
+    IF jsonb_typeof(NEW.document->'metadata'->'department') = 'array' THEN
+        INSERT INTO departments_distinct (department)
+        SELECT jsonb_array_elements_text(NEW.document->'metadata'->'department')
+        ON CONFLICT DO NOTHING;   -- ignore duplicates
+    END IF;
+
+    RETURN NEW;   -- value ignored for AFTER triggers
 END;
 $$ LANGUAGE plpgsql;
 

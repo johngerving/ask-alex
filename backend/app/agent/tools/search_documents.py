@@ -1,25 +1,12 @@
-import json
-from logging import Logger
 import os
-import re
-from textwrap import dedent
 from typing import Annotated, List, Optional
-from urllib.parse import urlparse
 
 from llama_index.core.workflow import (
     Context,
 )
 from llama_index.core.tools import FunctionTool
-from llama_index.core import VectorStoreIndex
-from llama_index.vector_stores.postgres import PGVectorStore
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.core.retrievers import QueryFusionRetriever
-from llama_index.core.schema import TextNode
-from llama_index.core.schema import MetadataMode
-from llama_index.core.llms import LLM
 from llama_index.core.schema import Document
 from llama_index.core.tools import FunctionTool
-import psycopg
 from psycopg import connect, sql
 import logging
 
@@ -36,7 +23,10 @@ if not pg_conn_str:
 async def search_documents(
     ctx: Context,
     query: Optional[
-        Annotated[str, "A PostgreSQL tsquery string to search for in the document text"]
+        Annotated[
+            str,
+            "A Tantivy query string that represents the key words or phrases to search for in the document.",
+        ]
     ] = None,
     title: Optional[Annotated[str, "The title of the document to search for"]] = None,
     author: Optional[Annotated[str, "The author of the document to search for"]] = None,
@@ -58,29 +48,34 @@ async def search_documents(
 ) -> str:
     """Search the knowledge base for relevant documents. Best used for information about documents themselves and summaries of specific documents. Do NOT use if answer can be found in a specific chunk of a given document. Use the retrieve_chunks tool instead for that purpose.
 
+    Returns:
+        str: A formatted string containing the search results, including document metadata and a summary of each document. If there are no results, it returns "No results found." If there was an error executing the search query, it raises an exception with the error message.
+
     Example user messages to use this tool for:
     - "What documents talk about ...?"
     - "Summarize documents about ..."
     """
+
+    page_size = 5
 
     where_parts: List[sql.Composable] = []
     params: List[object] = []
 
     # Full-text keywords over tsvector column
     if query:
-        where_parts.append(sql.SQL("l.text_search_tsv @@ to_tsquery(%s)"))
+        where_parts.append(sql.SQL("text @@@ paradedb.parse_with_field('text', %s)"))
         params.append(query)
 
     # Metadata collection field
     if collection:
-        where_parts.append(sql.SQL("(d.document->'metadata'->>'collection') = %s"))
+        where_parts.append(sql.SQL("(document->'metadata'->>'collection') = %s"))
         params.append(collection)
 
     # Metadata title field
     if title:
         where_parts.append(
             sql.SQL(
-                "to_tsvector('english', d.document->'metadata'->>'title') @@ to_tsquery('english', %s)"
+                "to_tsvector('english', document->'metadata'->>'title') @@ plainto_tsquery('english', %s)"
             )
         )
         params.append(title)
@@ -89,7 +84,7 @@ async def search_documents(
     if author:
         where_parts.append(
             sql.SQL(
-                "to_tsvector('english', jsonb_to_text(d.document->'metadata'->'author')) @@ to_tsquery('english', %s)"
+                "to_tsvector('english', jsonb_to_text(document->'metadata'->'author')) @@ plainto_tsquery('english', %s)"
             )
         )
         params.append(author)
@@ -97,19 +92,19 @@ async def search_documents(
     # Metadata department field
     if department:
         # `?` tests existence of a key in the JSONB array of authors
-        where_parts.append(sql.SQL("d.document->'metadata'->'department' ? %s"))
+        where_parts.append(sql.SQL("document->'metadata'->'department' ? %s"))
         params.append(department)
 
     # Metadata start_year field
     if start_year is not None:
         where_parts.append(
-            sql.SQL("(d.document->'metadata'->>'publication_date')::int >= %s")
+            sql.SQL("(document->'metadata'->>'publication_date')::int >= %s")
         )
         params.append(start_year)
 
     if end_year is not None:
         where_parts.append(
-            sql.SQL("(d.document->'metadata'->>'publication_date')::int <= %s")
+            sql.SQL("(document->'metadata'->>'publication_date')::int <= %s")
         )
         params.append(end_year)
 
@@ -124,7 +119,7 @@ async def search_documents(
     rank_sql: sql.Composable
     rank_params: List[object]
     if query:
-        rank_sql = sql.SQL("ts_rank(l.text_search_tsv, to_tsquery(%s))")
+        rank_sql = sql.SQL("paradedb.score(id)")
         # rank needs the same query text once more
         rank_params = [query]
     else:
@@ -135,47 +130,40 @@ async def search_documents(
     # Compose the COUNT and DATA queries
     count_query = sql.SQL(
         """
-        SELECT COUNT(DISTINCT d.id)
-        FROM   data_llamaindex_docs AS l
-        JOIN   documents            AS d ON d.id = l.document_id
+        SELECT COUNT(id)
+        FROM   documents
         {}
         """
     ).format(where_sql)
 
     data_query = sql.SQL(
         """
-        SELECT *
-        FROM (
-            SELECT DISTINCT ON (d.id)
-                d.document,
-                {} AS rank
-            FROM   data_llamaindex_docs AS l
-            JOIN   documents            AS d ON d.id = l.document_id
-            {}
-            ORDER  BY d.id, rank DESC
-        ) AS sub
+        SELECT document, id, {} AS rank
+        FROM documents 
+        {}
         ORDER BY rank DESC
-        LIMIT  10
-        OFFSET %s;
+        LIMIT %s
+        OFFSET %s
         """
     ).format(rank_sql, where_sql)
 
     # Combine params
     count_params = params.copy()
-    data_params: List[object] = []
-    if query:
-        data_params.append(query)
 
-    data_params.extend(params)
-    data_params.append(page * 10 - 10)
+    data_params = params.copy()
+    data_params.append(page_size)
+    data_params.append(page * page_size - page_size)
 
     # Run the queries
     try:
         with connect(pg_conn_str) as conn, conn.cursor() as cur:
+            print("count query:", count_query.as_string(cur))
             total = cur.execute(count_query, count_params).fetchone()[0]
             if total == 0:
                 return "No results found."
 
+            print("data query:", data_query.as_string(cur))
+            print("data params:", data_params)
             rows = cur.execute(data_query, data_params).fetchall()
     except Exception as e:
         logger.error(f"Error executing search query: {e}")
@@ -196,7 +184,7 @@ async def search_documents(
     await ctx.set("retrieved_sources", sources)
 
     # Format results
-    out = [f"Total results: {total}", f"Page {page} of {total // 10 + 1}"]
+    out = [f"Total results: {total}", f"Page {page} of {total // page_size + 1}"]
     out.append("<results>")
     for doc in docs:
         out.append("<result>")

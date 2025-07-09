@@ -115,8 +115,6 @@ class DocumentIndexer:
 
         self.logger.info(f"Processing batch of size {len(documents)}")
         for document in documents:
-            document.set_content(document.text.replace("\x00", ""))
-            document.set_content(document.text.replace("\\u0000", ""))
             try:
                 self.pipeline.run(documents=[document])
             except ValueError as e:
