@@ -21,28 +21,32 @@ import psycopg
 import logging
 
 
-async def analyze_documents(ids: List[str], query: str) -> Dict[str, str]:
-    """Analyze a document by its ID and query it for relevant information.
+async def analyze_documents(ctx: Context, ids: List[str], query: str) -> Dict[str, str]:
+    """Analyze a document by its ID and query it for relevant information. Expensive - Use only when the user specifically requests information from a document or documents.
 
     Args:
-        ids (list[str]): A list of IDs of documents or chunks inside of documents to analyze. A maximum of 5 IDs can be provided at once. If more than 5 IDs are provided, an error will be raised.
+        ids (list[str]): A list of IDs of documents or chunks inside of documents to analyze. A maximum of 3 IDs can be provided at once. If more than 3 IDs are provided, an error will be raised.
         query (str): The query to run against the documents.
 
     Returns:
         Dict[str, str]: A dictionary containing the responses from the analysis for each document ID.
     """
 
-    id_limit = 5
+    num_analyses: int = await ctx.store.get("num_analyses", default=0)
+    if num_analyses >= 1:
+        return "You have already performed another analysis. You are limited to one per user interaction. Wait until the next interaction."
+
+    id_limit = 3
 
     if len(ids) > id_limit:
         raise ValueError(
             f"A maximum of {id_limit} document IDs can be provided at once. Please reduce the number of IDs and try again."
         )
 
-    with psycopg.connect(os.getenv("PG_CONN_STR")) as conn:
-        with conn.cursor() as cur:
+    async with await psycopg.AsyncConnection.connect(os.getenv("PG_CONN_STR")) as conn:
+        async with conn.cursor() as cur:
             # Fetch the document by its ID, or if it's a chunk, fetch the parent document
-            cur.execute(
+            await cur.execute(
                 "SELECT documents.document, documents.id "
                 "FROM documents "
                 "RIGHT JOIN "
@@ -52,7 +56,7 @@ async def analyze_documents(ids: List[str], query: str) -> Dict[str, str]:
                 (ids, ids),
             )
 
-            rows = cur.fetchall()
+            rows = await cur.fetchall()
             if not rows:
                 raise ValueError(
                     "No documents found for the provided IDs. Please check the IDs and try again."
@@ -74,13 +78,14 @@ async def analyze_documents(ids: List[str], query: str) -> Dict[str, str]:
 
             parser = DoclingNodeParser(
                 chunker=HybridChunker(
-                    max_tokens=50000,
+                    max_tokens=100000,
                 )
             )
 
             analyses = ""
 
             for doc, id in zip(li_docs, ids):
+                doc.excluded_llm_metadata_keys = doc.metadata.keys()
                 nodes = await parser.aget_nodes_from_documents([doc])
 
                 nodes_with_scores = [
@@ -92,9 +97,9 @@ async def analyze_documents(ids: List[str], query: str) -> Dict[str, str]:
                 ]
 
                 llm = OpenRouter(
-                    model="meta-llama/llama-3.2-1b-instruct",
+                    model="meta-llama/llama-3.2-3b-instruct",
                     api_key=os.getenv("OPENROUTER_API_KEY"),
-                    context_window=128000,
+                    context_window=100000,
                     is_chat_model=True,
                     is_function_calling_model=True,
                 )
@@ -113,6 +118,10 @@ async def analyze_documents(ids: List[str], query: str) -> Dict[str, str]:
                 analyses += f"ID: {id}\n"
                 analyses += f"Response: {response}\n"
                 analyses += "</analysis>\n"
+
+            num_analyses: int = await ctx.store.get("num_analyses", default=0)
+            num_analyses = num_analyses + 1
+            await ctx.store.set("num_analyses", num_analyses)
 
             return analyses
 

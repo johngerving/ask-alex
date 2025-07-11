@@ -22,6 +22,15 @@ from app.agent.utils import Source
 from app.agent.query_engines.chunk_query_engine import ChunkQueryEngine
 
 small_llm = OpenRouter(
+    model="meta-llama/llama-3.2-3b-instruct",
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    context_window=128000,
+    max_tokens=4000,
+    is_chat_model=True,
+    is_function_calling_model=True,
+)
+
+llm = OpenRouter(
     model="qwen/qwen3-30b-a3b",
     api_key=os.getenv("OPENROUTER_API_KEY"),
     context_window=128000,
@@ -112,7 +121,7 @@ async def query_knowledge_base(
 
     query_engine = ChunkQueryEngine(
         retriever=retriever,
-        llm=small_llm,
+        llm=llm,
     )
 
     try:

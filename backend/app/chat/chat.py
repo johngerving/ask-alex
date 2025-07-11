@@ -8,19 +8,20 @@ from llama_index.core.memory import Memory
 from llama_index.core.workflow.context import Context
 from sse_starlette import EventSourceResponse
 from pydantic import BaseModel
-from app.agent.agent import Agent, FinalAnswerEvent, StreamEvent
+from app.agent.agents.agent import Agent, FinalAnswerEvent, StreamEvent
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.base.llms.types import ChatResponse
 from llama_index.core.workflow import JsonSerializer, JsonPickleSerializer
 from llama_index.core.agent.workflow import AgentStream, ToolCall
 from openai.types.chat import ChatCompletionMessageToolCall
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
-from langfuse import get_client
+from phoenix.otel import register
 import json
 import logging
-
 from app.user_store.store import User
-from app.agent.utils import Source, generate_citations
+from app.agent.utils import Source, generate_citations, message_to_tool_selections
+from app.agent.memory.postgresql_chat_store import PostgreSQLChatStore
+from app.agent.memory.custom_memory import CustomMemory
 
 load_dotenv()
 
@@ -36,7 +37,8 @@ logger.setLevel(logging.INFO)
 
 router = APIRouter()
 chat_store = ChatStore(PG_CONN_STR)
-LlamaIndexInstrumentor().instrument()
+tracer_provider = register()
+LlamaIndexInstrumentor().instrument(tracer_provider=tracer_provider)
 
 
 class ChatInformation(BaseModel):
@@ -103,7 +105,7 @@ async def get_chat(chat_id: int, request: Request):
 
     user: User = request.state.user
 
-    memory = Memory.from_defaults(
+    memory = CustomMemory.from_defaults(
         token_limit=127000,
         session_id=f"{user.id}-{chat_id}",
         async_database_uri=SQLALCHEMY_CONN_STR,
@@ -130,21 +132,7 @@ async def get_chat(chat_id: int, request: Request):
                     RequestMessage(content=msg.content or "", role="user")
                 )
             elif msg.role == MessageRole.ASSISTANT:
-                tool_calls = msg.additional_kwargs.get("tool_calls", [])
-
-                # Convert tool call dicts to ChatCompletionMessageToolCall objects
-                # This is a workaround for a bug in LlamaIndex
-                tool_calls = [
-                    ChatCompletionMessageToolCall(**tool_call)
-                    for tool_call in tool_calls
-                ]
-                msg.additional_kwargs["tool_calls"] = tool_calls
-
-                chat_response = ChatResponse(message=msg)
-
-                tool_calls = w.tool_llm.get_tool_calls_from_response(
-                    chat_response, error_on_no_tool_call=False
-                )
+                tool_calls = message_to_tool_selections(msg)
 
                 for tool_call in tool_calls:
                     display_history.append(
@@ -236,59 +224,55 @@ async def run(request: Request) -> EventSourceResponse:
             ctx = Context(workflow)
 
         try:
-            langfuse = get_client()
-            with langfuse.start_as_current_span(name="ask_alex_agent_trace"):
-                logger.info(f"Running workflow")
+            logger.info(f"Running workflow")
 
-                memory = Memory.from_defaults(
-                    session_id=f"{chat.user_id}-{chat.id}",
-                    async_database_uri=SQLALCHEMY_CONN_STR,
-                )
-                handler = workflow.run(message=message, ctx=ctx, memory=memory)
+            memory = CustomMemory.from_defaults(
+                session_id=f"{chat.user_id}-{chat.id}",
+                async_database_uri=SQLALCHEMY_CONN_STR,
+            )
+            handler = workflow.run(message=message, ctx=ctx, memory=memory)
 
-                # Read events from the workflow run
-                async for ev in handler.stream_events():
-                    if await request.is_disconnected():
-                        logger.info("Disconnected")
-                        break
+            # Read events from the workflow run
+            async for ev in handler.stream_events():
+                if await request.is_disconnected():
+                    logger.info("Disconnected")
+                    break
 
-                    # Stream events to the client
-                    if isinstance(ev, StreamEvent):
-                        yield {
-                            "event": "delta",
-                            "data": format_event(ev.delta),
-                        }
-                    elif isinstance(ev, ToolCall):
-                        yield {
-                            "event": "tool_call",
-                            "data": json.dumps(
-                                {
-                                    "id": ev.tool_id,
-                                    "name": ev.tool_name,
-                                    "kwargs": ev.tool_kwargs,
-                                }
-                            ),
-                        }
-                    elif isinstance(ev, FinalAnswerEvent):
-                        yield {
-                            "event": "response",
-                            "data": format_event(ev.content),
-                        }
-                    else:
-                        # logger.info(f"Event: {ev}")
-                        pass
+                # Stream events to the client
+                if isinstance(ev, StreamEvent):
+                    yield {
+                        "event": "delta",
+                        "data": format_event(ev.delta),
+                    }
+                elif isinstance(ev, ToolCall):
+                    yield {
+                        "event": "tool_call",
+                        "data": json.dumps(
+                            {
+                                "id": ev.tool_id,
+                                "name": ev.tool_name,
+                                "kwargs": ev.tool_kwargs,
+                            }
+                        ),
+                    }
+                elif isinstance(ev, FinalAnswerEvent):
+                    yield {
+                        "event": "response",
+                        "data": format_event(ev.content),
+                    }
+                else:
+                    # logger.info(f"Event: {ev}")
+                    pass
 
-                logger.info(f"Got to end of event stream")
+            logger.info(f"Got to end of event stream")
 
-                # Get the final response from the workflow
-                await handler
+            # Get the final response from the workflow
+            await handler
 
-                try:
-                    chat_store.set_context(chat.id, ctx, user)
-                except Exception as e:
-                    logger.error(f"Error setting context: {e}")
-
-            langfuse.flush()
+            try:
+                chat_store.set_context(chat.id, ctx, user)
+            except Exception as e:
+                logger.error(f"Error setting context: {e}")
 
         except Exception as e:
             logger.info(f"Exception: {e}")

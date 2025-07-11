@@ -1,5 +1,5 @@
 import os
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from llama_index.core.workflow import (
     Context,
@@ -7,7 +7,8 @@ from llama_index.core.workflow import (
 from llama_index.core.tools import FunctionTool
 from llama_index.core.schema import Document
 from llama_index.core.tools import FunctionTool
-from psycopg import connect, sql
+from psycopg import sql
+import psycopg
 import logging
 
 from app.agent.utils import Source
@@ -45,15 +46,24 @@ async def search_documents(
     page: Optional[
         Annotated[int, "The page number for pagination, starting from 1"]
     ] = 1,
+    sort_by: Optional[
+        Annotated[
+            Literal["relevance", "newest_first", "oldest_first"],
+            "The field to sort the results by",
+        ]
+    ] = "relevance",
 ) -> str:
-    """Search the knowledge base for relevant documents. Best used for information about documents themselves and summaries of specific documents. Do NOT use if answer can be found in a specific chunk of a given document. Use the retrieve_chunks tool instead for that purpose.
+    """Search the knowledge base for relevant documents. Best used for information about documents themselves. Do NOT use if answer can be found in a specific chunk of a given document. Use the query_knowledge_base tool instead for that purpose.
+
+    Before using this tool, you should call the call_metadata_agent tool to generate metadata for the search.
 
     Returns:
-        str: A formatted string containing the search results, including document metadata and a summary of each document. If there are no results, it returns "No results found." If there was an error executing the search query, it raises an exception with the error message.
+        str: A formatted string containing the document search results. If there are no results, it returns "No results found." If there was an error executing the search query, it raises an exception with the error message.
 
     Example user messages to use this tool for:
     - "What documents talk about ...?"
     - "Summarize documents about ..."
+    - "Find documents that mention ..."
     """
 
     page_size = 5
@@ -117,15 +127,16 @@ async def search_documents(
 
     # Ranking expression (only if keywords supplied)
     rank_sql: sql.Composable
-    rank_params: List[object]
-    if query:
-        rank_sql = sql.SQL("paradedb.score(id)")
-        # rank needs the same query text once more
-        rank_params = [query]
+    if sort_by == "relevance":
+        if query:
+            rank_sql = sql.SQL("paradedb.score(id)")
+        else:
+            rank_sql = sql.SQL("0")
     else:
-        # If there's no keyword search, give every row the same rank (zero)
-        rank_sql = sql.SQL("0")
-        rank_params = []
+        # Sort by publication date, descending
+        rank_sql = sql.SQL("(document->'metadata'->>'publication_date')::int")
+
+    order_by = sql.SQL("ASC" if sort_by == "oldest_first" else "DESC")
 
     # Compose the COUNT and DATA queries
     count_query = sql.SQL(
@@ -141,11 +152,11 @@ async def search_documents(
         SELECT document, id, {} AS rank
         FROM documents 
         {}
-        ORDER BY rank DESC
+        ORDER BY rank {}
         LIMIT %s
         OFFSET %s
         """
-    ).format(rank_sql, where_sql)
+    ).format(rank_sql, where_sql, order_by)
 
     # Combine params
     count_params = params.copy()
@@ -156,18 +167,22 @@ async def search_documents(
 
     # Run the queries
     try:
-        with connect(pg_conn_str) as conn, conn.cursor() as cur:
-            print("count query:", count_query.as_string(cur))
-            total = cur.execute(count_query, count_params).fetchone()[0]
-            if total == 0:
-                return "No results found."
+        async with await psycopg.AsyncConnection.connect(pg_conn_str) as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(count_query, count_params)
+                rows = await cur.fetchone()
+                total = rows[0]
+                if total == 0:
+                    return "No results found."
 
-            print("data query:", data_query.as_string(cur))
-            print("data params:", data_params)
-            rows = cur.execute(data_query, data_params).fetchall()
+                print("data query:", data_query.as_string(conn))
+                await cur.execute(data_query, data_params)
+                rows = await cur.fetchall()
     except Exception as e:
         logger.error(f"Error executing search query: {e}")
-        raise Exception(f"Error executing search query: {e}")
+        raise Exception(
+            f"There was an error executing the search query in the database: {e}"
+        )
 
     docs = [Document.from_dict(obj[0]) for obj in rows]
 
@@ -202,6 +217,4 @@ async def search_documents(
     return "\n".join(out)
 
 
-tool = FunctionTool.from_defaults(
-    async_fn=search_documents,
-)
+tool = FunctionTool.from_defaults(async_fn=search_documents, return_direct=True)

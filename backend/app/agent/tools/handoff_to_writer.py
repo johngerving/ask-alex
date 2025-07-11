@@ -11,5 +11,4 @@ def handoff_to_writer():
 
 tool = FunctionTool.from_defaults(
     fn=handoff_to_writer,
-    return_direct=True,
 )

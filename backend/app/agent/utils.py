@@ -1,6 +1,10 @@
 import re
 from typing import List
-from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.llms import ChatMessage, MessageRole, ChatResponse
+from llama_index.core.llms.llm import ToolSelection
+from llama_index.core.agent.workflow import AgentStream, ToolCall
+from llama_index.llms.openrouter import OpenRouter
+from openai.types.chat import ChatCompletionMessageToolCall
 import logging
 
 from pydantic import BaseModel
@@ -66,3 +70,26 @@ def filter_tool_calls(chat_history: List[ChatMessage]) -> List[ChatMessage]:
         msg.additional_kwargs.pop("tool_calls", None)
 
     return new_history
+
+
+def message_to_tool_selections(msg: ChatMessage) -> List[ToolSelection]:
+    llm = OpenRouter(
+        model="qwen/qwen3-30b-a3b",
+        is_function_calling_model=True,
+    )
+    tool_calls = msg.additional_kwargs.get("tool_calls", [])
+
+    # Convert tool call dicts to ChatCompletionMessageToolCall objects
+    # This is a workaround for a bug in LlamaIndex
+    tool_calls = [
+        ChatCompletionMessageToolCall(**tool_call) for tool_call in tool_calls
+    ]
+    msg.additional_kwargs["tool_calls"] = tool_calls
+
+    chat_response = ChatResponse(message=msg)
+
+    tool_calls = llm.get_tool_calls_from_response(
+        chat_response, error_on_no_tool_call=False
+    )
+
+    return tool_calls

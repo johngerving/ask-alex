@@ -7,7 +7,6 @@ from llama_index.core.workflow.context import Context
 from llama_index.core.workflow import JsonSerializer, JsonPickleSerializer
 
 from app.user_store.store import User
-from app.agent.agent import Agent
 
 
 class Chat:
