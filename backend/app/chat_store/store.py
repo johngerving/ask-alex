@@ -146,6 +146,15 @@ class ChatStore:
 
                 if cur.fetchone() is None:
                     raise ValueError(f"Chat with id {chat_id} not found")
+
+                cur.execute(
+                    "DELETE FROM llama_index_memory WHERE key = %s RETURNING id",
+                    (f"{user.id}-{chat_id}",),
+                )
+
+                if cur.fetchone() is None:
+                    print(f"No memory found for chat {chat_id} and user {user.id}")
+
                 conn.commit()
 
     def __enter__(self):

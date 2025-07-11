@@ -170,7 +170,8 @@ class RetrievalAgent(FunctionAgent):
             last_chat_response, error_on_no_tool_call=False
         )
 
-        print("Reasoning:", reasoning)
+        if reasoning:
+            print("Reasoning:", reasoning)
 
         last_chat_response.message.content = (
             (f"<think>\n{reasoning}</think>\n") if reasoning else ""

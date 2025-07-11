@@ -24,6 +24,8 @@ import logging
 async def analyze_documents(ctx: Context, ids: List[str], query: str) -> Dict[str, str]:
     """Analyze a document by its ID and query it for relevant information. Expensive - Use only when the user specifically requests information from a document or documents.
 
+    If the user is requesting information over multiple documents, you may pass up to 3 document or chunk IDs in.
+
     Args:
         ids (list[str]): A list of IDs of documents or chunks inside of documents to analyze. A maximum of 3 IDs can be provided at once. If more than 3 IDs are provided, an error will be raised.
         query (str): The query to run against the documents.
@@ -47,7 +49,7 @@ async def analyze_documents(ctx: Context, ids: List[str], query: str) -> Dict[st
         async with conn.cursor() as cur:
             # Fetch the document by its ID, or if it's a chunk, fetch the parent document
             await cur.execute(
-                "SELECT documents.document, documents.id "
+                "SELECT DISTINCT ON (documents.id) documents.document, documents.id "
                 "FROM documents "
                 "RIGHT JOIN "
                 "data_llamaindex_docs ON "
@@ -56,7 +58,7 @@ async def analyze_documents(ctx: Context, ids: List[str], query: str) -> Dict[st
                 (ids, ids),
             )
 
-            rows = await cur.fetchall()
+            rows = await cur.fetchmany(id_limit)
             if not rows:
                 raise ValueError(
                     "No documents found for the provided IDs. Please check the IDs and try again."
@@ -100,6 +102,7 @@ async def analyze_documents(ctx: Context, ids: List[str], query: str) -> Dict[st
                     model="meta-llama/llama-3.2-3b-instruct",
                     api_key=os.getenv("OPENROUTER_API_KEY"),
                     context_window=100000,
+                    max_tokens=4000,
                     is_chat_model=True,
                     is_function_calling_model=True,
                 )
@@ -116,11 +119,16 @@ async def analyze_documents(ctx: Context, ids: List[str], query: str) -> Dict[st
 
                 analyses += "<analysis>\n"
                 analyses += f"ID: {id}\n"
+                analyses += f"Title: {doc.metadata.get('title', 'No title')}\n"
                 analyses += f"Response: {response}\n"
-                analyses += "</analysis>\n"
+                analyses += "</analysis>\n\n"
 
             num_analyses: int = await ctx.store.get("num_analyses", default=0)
             num_analyses = num_analyses + 1
+
+            if num_analyses > 0:
+                analyses += "<note>You will not be able to perform another analysis until the next user interaction.</note>\n"
+
             await ctx.store.set("num_analyses", num_analyses)
 
             return analyses

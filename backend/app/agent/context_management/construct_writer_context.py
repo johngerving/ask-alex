@@ -19,67 +19,26 @@ def construct_writer_context(history: List[ChatMessage]) -> str:
         content=FINAL_ANSWER_PROMPT,
     )
 
-    memory_str = ""
-
-    last_user_msg_idx = -1
+    # Don't include tool call results from more than two turns ago
+    # This is to avoid overwhelming the writer with too much context
+    # and to keep the context relevant to the current conversation.
+    tool_omit_cutoff_idx = -1
+    user_msg_count = 0
     for i in range(len(history) - 1, -1, -1):
         if history[i].role == MessageRole.USER:
-            last_user_msg_idx = i
-            break
+            user_msg_count += 1
+            if user_msg_count >= 2:
+                tool_omit_cutoff_idx = i
+                break
+
+    final_history = [system_message]
 
     for i, message in enumerate(history):
         if message.additional_kwargs.get("display", True):
-            if message.role == MessageRole.ASSISTANT:
-                if message.additional_kwargs.get(
-                    "tool_calls"
-                ) is not None and isinstance(
-                    message.additional_kwargs["tool_calls"], list
-                ):
-                    tool_calls = message_to_tool_selections(message)
+            if message.role == MessageRole.TOOL and not i > tool_omit_cutoff_idx:
+                # If the tool result is from a previous user message, we don't include it in the context
+                message.content = "Tool result omitted for brevity.\n"
 
-                    for tool_call in tool_calls:
-                        try:
-                            tool_name = tool_call.tool_name
-                            tool_args = tool_call.tool_kwargs or {}
-
-                            memory_str += f"<{tool_name}>\n"
-
-                            for key, value in tool_args.items():
-                                memory_str += f"\t{key}: {value}\n"
-                            memory_str += f"</{tool_name}>\n\n"
-                        except Exception as e:
-                            print(e)
-                else:
-                    memory_str += f"<assistant>\n"
-                    memory_str += f"{message.content}\n"
-                    memory_str += "</assistant>\n\n"
-            elif message.role == MessageRole.TOOL:
-                try:
-                    tool_name = message.additional_kwargs["tool_call_name"]
-
-                    memory_str += f"<{tool_name}_result>\n"
-                    if i > last_user_msg_idx:
-                        memory_str += f"{message.content}\n"
-                    else:
-                        # If the tool result is from a previous user message, we don't include it in the context
-                        memory_str += f"Tool result omitted for brevity.\n"
-                    memory_str += f"</{tool_name}_result>\n\n"
-                except Exception as e:
-                    print(e)
-
-            elif message.role == MessageRole.USER:
-                memory_str += f"<user>\n"
-                memory_str += f"{message.content}\n"
-                memory_str += "</user>\n\n"
-
-    memory_str += "Now, write an answer to the user."
-
-    final_history = [
-        system_message,
-        ChatMessage(
-            role=MessageRole.USER,
-            content=memory_str.strip(),
-        ),
-    ]
+            final_history.append(message)
 
     return final_history

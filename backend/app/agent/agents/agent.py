@@ -142,6 +142,7 @@ class Agent(Workflow):
             api_key=os.getenv("OPENROUTER_API_KEY"),
             context_window=41000,
             max_tokens=4000,
+            temperature=0.001,
             is_chat_model=True,
             is_function_calling_model=True,
         )

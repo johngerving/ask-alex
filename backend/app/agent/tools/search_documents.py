@@ -175,7 +175,6 @@ async def search_documents(
                 if total == 0:
                     return "No results found."
 
-                print("data query:", data_query.as_string(conn))
                 await cur.execute(data_query, data_params)
                 rows = await cur.fetchall()
     except Exception as e:

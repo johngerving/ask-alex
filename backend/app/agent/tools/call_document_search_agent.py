@@ -16,6 +16,11 @@ from app.agent.prompts import DOCUMENT_SEARCH_AGENT_PROMPT
 async def call_document_search_agent(ctx: Context, prompt: str) -> str:
     """Call the document search agent to get a list of documents.
 
+    Example user messages to use this tool for:
+    - "What documents talk about ...?"
+    - "Summarize documents about ..."
+    - "Find documents that mention ..."
+
     Args:
         prompt (str): The prompt to send to the document search agent. This should be a detailed, standalone prompt requesting a kind of document and should reflect the user's query.
 
