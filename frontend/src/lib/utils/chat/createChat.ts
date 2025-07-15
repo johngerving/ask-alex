@@ -2,7 +2,7 @@ import { goto, invalidateAll } from '$app/navigation';
 import { PUBLIC_BACKEND_URL } from '$env/static/public';
 import { redirect } from '@sveltejs/kit';
 
-export async function createChat() {
+export async function createChat(): Promise<string> {
 	const response = await fetch(`${PUBLIC_BACKEND_URL}/chat`, {
 		method: 'POST',
 		credentials: 'include'
@@ -18,8 +18,8 @@ export async function createChat() {
 	}
 
 	const chatId = data.id;
+	console.log('Data in createChat:', data);
+	console.log('ID in createChat:', chatId);
 
-	goto(`/chat/${chatId}`, {
-		invalidateAll: true
-	});
+	return chatId;
 }

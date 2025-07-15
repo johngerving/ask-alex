@@ -44,7 +44,7 @@ LlamaIndexInstrumentor().instrument(tracer_provider=tracer_provider)
 class ChatInformation(BaseModel):
     """Model for chat information."""
 
-    id: int
+    id: str
     title: str
 
 
@@ -88,7 +88,7 @@ async def post_chat(request: Request):
 
 
 @router.delete("/{chat_id}")
-async def delete_chat(chat_id: int, request: Request):
+async def delete_chat(chat_id: str, request: Request):
     """Deletes a chat by ID."""
 
     user: User = request.state.user
@@ -100,7 +100,7 @@ async def delete_chat(chat_id: int, request: Request):
 
 
 @router.get("/{chat_id}/messages")
-async def get_chat(chat_id: int, request: Request):
+async def get_chat(chat_id: str, request: Request):
     """Returns the history of a chat by ID."""
 
     user: User = request.state.user
@@ -170,8 +170,8 @@ class RequestToolCall(BaseModel):
 
 
 class RAGBody(BaseModel):
-    messages: list[RequestMessage]
-    chatId: int
+    message: RequestMessage
+    chatId: str
 
 
 class RAGResponse(BaseModel):
@@ -184,34 +184,24 @@ async def run(request: Request) -> EventSourceResponse:
 
     body = RAGBody(**await request.json())
 
-    # Run the pipeline with the user's query
-    messages: List[ChatMessage] = []
+    message: ChatMessage
 
-    # Convert the request body to a list of LlamaIndex messages
-    if len(body.messages) == 0:
-        raise HTTPException(status_code=400, detail="Empty field 'messages'")
-    for el in body.messages:
-        if el.role == "assistant":
-            messages.append(
-                ChatMessage(
-                    role="assistant",
-                    content=el.content,
-                )
-            )
-        elif el.role == "user":
-            messages.append(
-                ChatMessage(
-                    role="user",
-                    content=el.content,
-                )
-            )
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Message role must be either 'assistant' or 'user'. Got {el.role}",
-            )
-
-    message = messages[-1]
+    # Convert the request body to a LlamaIndex message
+    if body.message.role == "assistant":
+        message = ChatMessage(
+            role="assistant",
+            content=body.message.content,
+        )
+    elif body.message.role == "user":
+        message = ChatMessage(
+            role="user",
+            content=body.message.content,
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Message role must be either 'assistant' or 'user'. Got {body.message.role}",
+        )
 
     async def event_generator():
         workflow = Agent(logger=logger, timeout=180, verbose=True)

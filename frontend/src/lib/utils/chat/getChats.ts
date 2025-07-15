@@ -22,7 +22,7 @@ export async function getChats(fetch: FetchFunction): Promise<Chat[]> {
 			throw new Error('Invalid chat object');
 		}
 		if (!('id' in chat)) throw new Error('Chat object missing id');
-		if (typeof chat.id !== 'number') throw new Error('Invalid chat ID type');
+		if (typeof chat.id !== 'string') throw new Error('Invalid chat ID type');
 
 		if (!('title' in chat)) throw new Error('Chat object missing title');
 		if (typeof chat.title !== 'string') throw new Error('Invalid chat title type');

@@ -1,7 +1,7 @@
 import { goto, invalidateAll } from '$app/navigation';
 import { PUBLIC_BACKEND_URL } from '$env/static/public';
 
-export async function deleteChat(chatId: number): Promise<void> {
+export async function deleteChat(chatId: string): Promise<void> {
 	const response = await fetch(`${PUBLIC_BACKEND_URL}/chat/${chatId}`, {
 		method: 'DELETE',
 		credentials: 'include'

@@ -138,7 +138,7 @@ class Agent(Workflow):
         )
 
         self.tool_llm = OpenRouter(
-            model="qwen/qwen3-32b",
+            model="qwen/qwen3-235b-a22b",
             api_key=os.getenv("OPENROUTER_API_KEY"),
             context_window=41000,
             max_tokens=4000,

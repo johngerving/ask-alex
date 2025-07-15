@@ -13,20 +13,28 @@
 
 	let { chatsPromise }: { chatsPromise: Promise<Chat[]> } = $props();
 
-	let selectedChatId = $derived(parseInt(page.params.chatId));
+	let chats: Chat[] | undefined = $state(undefined);
+
+	$effect(() => {
+		chatsPromise.then((chatsResult) => {
+			chats = chatsResult;
+		});
+	});
+
+	let selectedChatId = $derived(page.params.chatId);
 
 	const sidebar = useSidebar();
 </script>
 
-{#await chatsPromise}
+{#if chats === undefined}
 	<p>Loading chats...</p>
-{:then chats}
+{:else}
 	{#each chats as chat (chat.id)}
 		<Sidebar.MenuItem
 			style="list-style: none;"
 			class={cn('rounded-md', chat.id === selectedChatId ? 'bg-accent' : '')}
 		>
-			<a href={`/chat/${chat.id}`} class="w-full">
+			<a data-sveltekit-reload href={`/chat/${chat.id}`} class="w-full">
 				<Sidebar.MenuButton class="px-4 py-3"><span>{chat.title}</span></Sidebar.MenuButton>
 			</a>
 			<DropdownMenu.Root>
@@ -80,6 +88,5 @@
 			</DropdownMenu.Root>
 		</Sidebar.MenuItem>
 	{/each}
-{:catch error}
-	<p class="text-destructive">Error loading chats: {error.message}</p>
-{/await}
+{/if}
+<!-- <p class="text-destructive">Error loading chats: {error.message}</p> -->

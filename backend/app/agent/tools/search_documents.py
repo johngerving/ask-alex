@@ -55,7 +55,6 @@ async def search_documents(
 ) -> str:
     """Search the knowledge base for relevant documents. Best used for information about documents themselves. Do NOT use if answer can be found in a specific chunk of a given document. Use the query_knowledge_base tool instead for that purpose.
 
-    Before using this tool, you should call the call_metadata_agent tool to generate metadata for the search.
 
     Returns:
         str: A formatted string containing the document search results. If there are no results, it returns "No results found." If there was an error executing the search query, it raises an exception with the error message.

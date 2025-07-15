@@ -4,15 +4,31 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import type { LayoutProps } from './$types';
 	import AppSidebar from '$lib/components/chat/app-sidebar.svelte';
+	import { page } from '$app/state';
+	import { invalidateAll, onNavigate } from '$app/navigation';
 
 	let { data, children }: LayoutProps = $props();
+	let user = $derived(data.user);
 	let chats = $derived(data.chats);
+	let chatId = $derived(data.chatId);
 
-	$inspect(chats);
+	let chatHistory = $derived(data.chatHistory);
+
+	onNavigate(() => {
+		console.log('Navigated');
+	});
 </script>
 
 <Sidebar.Provider class="h-full w-full">
 	<AppSidebar chatsPromise={chats} />
 	<Sidebar.Trigger class="m-2 h-10 w-10" />
+	<main class="h-full w-full pb-2">
+		{#if user}
+			<Chat {chatId} bind:chatHistory />
+		{:else}
+			<p>Not authenticated</p>
+		{/if}
+	</main>
+
 	{@render children()}
 </Sidebar.Provider>

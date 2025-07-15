@@ -5,7 +5,7 @@ import type { Tool } from '$lib/types/toolCall';
 
 export const sendMessages = async (
 	messages: (Message | Tool)[],
-	chatId: number,
+	chatId: string,
 	fns: {
 		onStart: () => void;
 		onUpdateContent: (delta: string) => void;
@@ -27,7 +27,7 @@ export const sendMessages = async (
 				'Content-Type': 'application/json'
 			},
 			credentials: 'include',
-			body: JSON.stringify({ messages: messagesCopy, chatId }) // Pass in query as body of request
+			body: JSON.stringify({ message: messagesCopy[messagesCopy.length - 1], chatId }) // Pass in query as body of request
 		});
 
 		const reader = res.body?.getReader();

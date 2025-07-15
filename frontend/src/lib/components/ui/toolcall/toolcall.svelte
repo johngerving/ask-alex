@@ -6,8 +6,9 @@
 	let { toolCall }: { toolCall: Tool } = $props();
 
 	const toolNameMapping = {
-		retrieve_chunks: 'Searching knowledge base',
-		retrieve_documents: 'Searching documents'
+		query_knowledge_base: 'Searching knowledge base',
+		call_document_search_agent: 'Searching documents',
+		analyze_documents: 'Analyzing documents'
 	};
 
 	let toolName = $derived(
@@ -33,7 +34,7 @@
 		<div class="border-border h-fit w-fit rounded-[6px] border p-1">
 			<MynauiTool class="text-muted-foreground h-5 w-5" />
 		</div>
-		<h2 class="text-muted-foreground text-base">{toolName}</h2>
+		<h2 class="text-muted-foreground text-sm italic">{toolName}</h2>
 	</button>
 	{#if open}
 		<div transition:slide class="border-border border-t p-2 text-sm">

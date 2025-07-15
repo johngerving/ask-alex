@@ -5,7 +5,7 @@ import type { Tool } from '$lib/types/toolCall';
 import { error } from '@sveltejs/kit';
 import { v4 } from 'uuid';
 
-export async function getChatHistory(chatId: number, fetch: FetchFunction): Promise<Message[]> {
+export async function getChatHistory(chatId: string, fetch: FetchFunction): Promise<Message[]> {
 	const response = await fetch(`${PUBLIC_BACKEND_URL}/chat/${chatId}/messages`, {
 		method: 'GET',
 		credentials: 'include'

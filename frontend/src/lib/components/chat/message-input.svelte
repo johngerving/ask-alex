@@ -9,10 +9,12 @@
 	import { sendMessages } from '$lib/utils/chat/sendMessages';
 
 	import { v4 } from 'uuid';
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll, replaceState } from '$app/navigation';
 	import type { Tool } from '$lib/types/toolCall';
+	import { createChat } from '$lib/utils/chat/createChat';
+	import { page } from '$app/state';
 
-	let { chatId, chatHistory = $bindable() }: { chatId: number; chatHistory: Message[] } = $props();
+	let { chatId, chatHistory = $bindable() }: { chatId: string; chatHistory: Message[] } = $props();
 
 	let text = $state('');
 
@@ -30,6 +32,15 @@
 	}
 
 	async function handleSend() {
+		let url = page.url;
+		let currentChatId = chatId;
+		if (url.pathname === '/chat') {
+			const newChatId = await createChat();
+			console.log('New chat created with ID:', newChatId);
+			currentChatId = newChatId;
+			goto(`/chat/${currentChatId}`);
+		}
+
 		let userMessageId = v4();
 		let assistantMessageId = v4();
 
@@ -45,7 +56,7 @@
 			}
 		];
 
-		sendMessages(chatHistory, chatId, {
+		sendMessages(chatHistory, currentChatId, {
 			onStart: () => {
 				messageInProgress = true;
 
@@ -132,18 +143,25 @@
 	}
 </script>
 
-<form onsubmit={handleSend} class="flex w-full items-end gap-2">
-	<ChatTextarea
-		class="h-11 min-h-11 resize-none focus-visible:ring-offset-0"
-		spellcheck="false"
-		bind:value={text}
-		onkeydown={handleOnKeyDown}
-	/>
-	<Button
-		type="submit"
-		disabled={messageEmpty || messageInProgress}
-		class="relative h-11 w-11 overflow-hidden rounded-full transition-all"
-	>
-		<MaterialSymbolsArrowUpwardRounded class="absolute h-3/4 w-3/4 text-xl" />
-	</Button>
+<form
+	onsubmit={handleSend}
+	class="focus-within:outline-primary border-input w-full overflow-hidden rounded-md border shadow-sm outline-1 focus-within:outline hover:cursor-text"
+>
+	<label for="message-input" class="flex h-full w-full flex-col items-end hover:cursor-text">
+		<ChatTextarea
+			class="m-1 h-11 min-h-11 resize-none px-5 py-2 placeholder:text-gray-500"
+			id="message-input"
+			spellcheck="false"
+			bind:value={text}
+			placeholder="Ask Alex"
+			onkeydown={handleOnKeyDown}
+		/>
+		<Button
+			type="submit"
+			disabled={messageEmpty || messageInProgress}
+			class="relative mb-1 mr-1 h-11 w-11 overflow-hidden rounded-full transition-all hover:cursor-default"
+		>
+			<MaterialSymbolsArrowUpwardRounded class="absolute h-3/4 w-3/4 text-xl" />
+		</Button>
+	</label>
 </form>

@@ -10,8 +10,8 @@ from app.user_store.store import User
 
 
 class Chat:
-    def __init__(self, id: int, user_id: int, context: dict, updated_at: datetime):
-        self.id: int = id
+    def __init__(self, id: str, user_id: int, context: dict, updated_at: datetime):
+        self.id: str = id
         self.user_id: int = user_id
         self.context: dict = context
         self.updated_at: datetime = updated_at
@@ -38,7 +38,7 @@ class ChatStore:
         with self.pool.connection() as conn:
             with conn.cursor() as cur:
                 rows = cur.execute(
-                    "SELECT id, user_id, context, updated_at FROM chats WHERE user_id = %s ORDER BY updated_at DESC",
+                    "SELECT random_id, user_id, context, updated_at FROM chats WHERE user_id = %s ORDER BY updated_at DESC",
                     (user.id,),
                 ).fetchall()
 
@@ -52,19 +52,19 @@ class ChatStore:
                     for row in rows
                 ]
 
-    def create(self, user: User) -> int:
+    def create(self, user: User) -> str:
         """Creates a new chat for the given user
 
         Args:
             user (User): The user to create the chat for
 
         Returns:
-            int: The id of the created chat
+            str: The id of the created chat
         """
         with self.pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO chats (user_id) VALUES (%s) RETURNING id, user_id, context, updated_at",
+                    "INSERT INTO chats (user_id) VALUES (%s) RETURNING random_id, user_id, context, updated_at",
                     (user.id,),
                 )
                 row = cur.fetchone()[0]
@@ -72,7 +72,7 @@ class ChatStore:
 
                 return row
 
-    def find_by_id(self, chat_id: int, user: User) -> Chat:
+    def find_by_id(self, chat_id: str, user: User) -> Chat:
         """Finds a chat by id
 
         Args:
@@ -85,7 +85,7 @@ class ChatStore:
         with self.pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, user_id, context, updated_at FROM chats WHERE id = %s AND user_id = %s",
+                    "SELECT random_id, user_id, context, updated_at FROM chats WHERE random_id = %s AND user_id = %s",
                     (chat_id, user.id),
                 )
                 row = cur.fetchone()
@@ -119,7 +119,7 @@ class ChatStore:
                     raise ValueError(f"Failed to serialize context: {e}")
 
                 cur.execute(
-                    "UPDATE chats SET context = %s, updated_at = NOW() WHERE id = %s AND user_id = %s RETURNING id",
+                    "UPDATE chats SET context = %s, updated_at = NOW() WHERE random_id = %s AND user_id = %s RETURNING random_id",
                     (Jsonb(ctx_dict), chat_id, user.id),
                 )
 
@@ -127,11 +127,11 @@ class ChatStore:
                     raise ValueError(f"Chat with id {chat_id} not found")
                 conn.commit()
 
-    def delete(self, chat_id: int, user: User):
+    def delete(self, chat_id: str, user: User):
         """Deletes a chat by id
 
         Args:
-            chat_id (int): The id of the chat to delete
+            chat_id (str): The id of the chat to delete
             user (User): The user who owns the chat
 
         Raises:
@@ -140,7 +140,7 @@ class ChatStore:
         with self.pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "DELETE FROM chats WHERE id = %s AND user_id = %s RETURNING id",
+                    "DELETE FROM chats WHERE random_id = %s AND user_id = %s RETURNING random_id",
                     (chat_id, user.id),
                 )
 
