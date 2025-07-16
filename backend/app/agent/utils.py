@@ -29,20 +29,24 @@ def generate_citations(sources: List[Source], text: str) -> str:
     Returns:
         str: The text response with citations generated.
     """
+    citation_num = 1
+
     # Find citations in the response
     citations = re.findall("(\[([^\]]*)\])", text)
     for citation in citations:
         try:
-            for source in sources:
-                matching_citation_idx = list(
-                    citation[1] in s.id for s in sources
-                ).index(True)
-
-            # Replace the citation with a link to the document
-            text = text.replace(
-                citation[0],
-                f"[[{matching_citation_idx+1}]]({sources[matching_citation_idx].link})",
+            matching_citation_idx = list(citation[1] in s.id for s in sources).index(
+                True
             )
+
+            num_occurrences = text.count(citation[0])
+            if num_occurrences > 0:
+                # Replace the citation with a link to the document
+                text = text.replace(
+                    citation[0],
+                    f"[[{citation_num}]]({sources[matching_citation_idx].link})",
+                )
+                citation_num += 1
         except Exception as e:
             logger.error(f"Error generating citation for {citation[0]}: {e}")
             text = text.replace(citation[0], "")

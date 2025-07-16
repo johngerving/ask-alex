@@ -127,6 +127,13 @@ class RetrievalAgent(FunctionAgent):
 
         current_llm_input = [*llm_input, *scratchpad]
 
+        for msg in current_llm_input:
+            msg.additional_kwargs = {
+                key: value
+                for key, value in msg.additional_kwargs.items()
+                if key not in ["display", "tool_call_name"]
+            }
+
         ctx.write_event_to_stream(
             AgentInput(input=current_llm_input, current_agent_name=self.name)
         )
@@ -266,15 +273,15 @@ class RetrievalAgent(FunctionAgent):
             self.scratchpad_key, default=[]
         )
 
-        if scratchpad:
-            # Filter out handoff_to_writer messages when adding to memory
-            scratchpad = [
-                msg for msg in scratchpad if msg.additional_kwargs.get("display", True)
-            ]
-            for msg in scratchpad:
-                if msg.role == MessageRole.ASSISTANT:
-                    msg.content = ""
+        # Filter out handoff_to_writer messages when adding to memory
+        scratchpad = [
+            msg for msg in scratchpad if msg.additional_kwargs.get("display", True)
+        ]
+        for msg in scratchpad:
+            if msg.role == MessageRole.ASSISTANT:
+                msg.content = ""
 
+        if scratchpad:
             await memory.aput_messages(scratchpad)
 
         # reset scratchpad
@@ -396,6 +403,7 @@ class RetrievalAgent(FunctionAgent):
         if any(
             [tool_call.tool_name == "handoff_to_writer" for tool_call in ev.tool_calls]
         ):
+            ev.tool_calls = []
             memory: BaseMemory = await ctx.store.get("memory")
             output = await self.finalize(ctx, ev, memory)
 

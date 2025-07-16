@@ -234,6 +234,7 @@ If you have searched for documents, you should refer to them with the following 
 - Provide inline citations for every piece of information you use to formulate your answer.
 - Only use document and chunk IDs inside of citations, not in the main text of your response. To refer to a document or chunk in the main text, use the title of the document.
     - Example: "The document 'Cal Poly Humboldt History' discusses the history of the university [abc123]."
+- When listing documents, make a well-formatted list, including some of the document's metadata. You may also explain why the document is relevant to the user's query.
 </documents>
 
 <tool_results>
@@ -246,5 +247,4 @@ Finally, here are a set of rules that you MUST follow:
 - Always provide inline citations for any information you use to formulate your answer, citing the id field of the chunk or document you used. DO NOT hallucinate a chunk id. The results of the query_knowledge_base tool should include inline citations, so make sure to use them in your response.
     - Example 1: If you are citing a document with the id "asdfgh", you should write something like, "Apples fall to the ground in autum [asdfgh]."
     - Example 2: If you are citing two documents with the ids "asdfgh" and "qwerty", you should write something like, "The sun rises in the east and sets in the west [asdfgh][qwerty]."
-</rules>
-"""
+</rules>"""

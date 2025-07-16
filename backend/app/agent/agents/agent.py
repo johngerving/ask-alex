@@ -188,18 +188,24 @@ class Agent(Workflow):
         memory: Memory = await ctx.get("memory")
         history = await memory.aget()
 
-        # Call the LLM to determine the route
-        json_obj: Dict[str, str] = sllm.chat(
-            messages=construct_router_context(history=history),
-        ).raw.dict()
+        return RetrievalRouteEvent()
 
-        # Parse the JSON response from the LLM as a ChatOrRetrieval object
-        response = ChatOrRetrieval(**json_obj)
+        try:
+            # Call the LLM to determine the route
+            json_obj: Dict[str, str] = sllm.chat(
+                messages=construct_router_context(history=history),
+            ).raw.dict()
 
-        # Route query based on the LLM's response
-        if response.route == "chat":
-            return ChatRouteEvent()
-        else:
+            # Parse the JSON response from the LLM as a ChatOrRetrieval object
+            response = ChatOrRetrieval(**json_obj)
+
+            # Route query based on the LLM's response
+            if response.route == "chat":
+                return ChatRouteEvent()
+            else:
+                return RetrievalRouteEvent()
+        except Exception as e:
+            self.logger.error(f"Error in routing: {e}")
             return RetrievalRouteEvent()
 
     @step

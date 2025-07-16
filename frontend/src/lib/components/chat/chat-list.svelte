@@ -10,6 +10,7 @@
 	import { cn } from '$lib/utils';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
+	import { invalidateAll, preloadData } from '$app/navigation';
 
 	let { chatsPromise }: { chatsPromise: Promise<Chat[]> } = $props();
 
@@ -34,7 +35,13 @@
 			style="list-style: none;"
 			class={cn('rounded-md', chat.id === selectedChatId ? 'bg-accent' : '')}
 		>
-			<a data-sveltekit-reload href={`/chat/${chat.id}`} class="w-full">
+			<a
+				onclick={() => {
+					if (page.url.pathname === '/chat') invalidateAll();
+				}}
+				href={`/chat/${chat.id}`}
+				class="w-full"
+			>
 				<Sidebar.MenuButton class="px-4 py-3"><span>{chat.title}</span></Sidebar.MenuButton>
 			</a>
 			<DropdownMenu.Root>
