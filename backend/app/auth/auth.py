@@ -129,7 +129,14 @@ async def auth(request: Request) -> RedirectResponse:
     return response
 
 
-@router.post("/auth/logout")
+@router.post("/logout")
 async def logout(request: Request):
-    request.session.pop("session", None)
-    return RedirectResponse(url="/")
+    response = RedirectResponse(url=f"{FRONTEND_URL}/chat", status_code=303)
+    response.set_cookie(
+        "access_token",
+        "",
+        httponly=True,
+        samesite="strict",
+        secure=(os.getenv("ENVIRONMENT") != "development"),
+    )
+    return response

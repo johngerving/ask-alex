@@ -188,8 +188,6 @@ class Agent(Workflow):
         memory: Memory = await ctx.get("memory")
         history = await memory.aget()
 
-        return RetrievalRouteEvent()
-
         try:
             # Call the LLM to determine the route
             json_obj: Dict[str, str] = sllm.chat(

@@ -145,7 +145,7 @@
 
 <form
 	onsubmit={handleSend}
-	class="focus-within:outline-primary border-input w-full overflow-hidden rounded-md border shadow-sm outline-1 focus-within:outline hover:cursor-text"
+	class="focus-within:outline-primary border-input w-full overflow-hidden rounded-md border shadow-sm outline outline-1 outline-slate-100 transition-all duration-150 hover:cursor-text"
 >
 	<label for="message-input" class="flex h-full w-full flex-col items-end hover:cursor-text">
 		<ChatTextarea

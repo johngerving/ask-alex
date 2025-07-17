@@ -127,13 +127,6 @@ class RetrievalAgent(FunctionAgent):
 
         current_llm_input = [*llm_input, *scratchpad]
 
-        for msg in current_llm_input:
-            msg.additional_kwargs = {
-                key: value
-                for key, value in msg.additional_kwargs.items()
-                if key not in ["display", "tool_call_name"]
-            }
-
         ctx.write_event_to_stream(
             AgentInput(input=current_llm_input, current_agent_name=self.name)
         )
@@ -408,6 +401,17 @@ class RetrievalAgent(FunctionAgent):
             output = await self.finalize(ctx, ev, memory)
 
             return StopEvent(result=output)
+
+        scratchpad: List[ChatMessage] = await ctx.store.get(
+            self.scratchpad_key, default=[]
+        )
+        scratchpad.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content="<agent_reminder>You must call at least one tool. Call handoff_to_writer to hand off the task to a writer.</agent_reminder>",
+                additional_kwargs={"display": False},
+            )
+        )
 
         if not ev.tool_calls:
             scratchpad: List[ChatMessage] = await ctx.store.get(

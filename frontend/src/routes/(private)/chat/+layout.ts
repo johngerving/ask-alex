@@ -6,10 +6,10 @@ import { getUser } from '$lib/utils/chat/getUser';
 import { redirect } from '@sveltejs/kit';
 import type { Message } from '$lib/types/message';
 import { getChatHistory } from '$lib/utils/chat/getChatHistory.js';
+import type { User } from '$lib/types/user';
 
 export const load: LayoutLoad = async ({ fetch, params }) => {
-	let user;
-
+	let user: User;
 	try {
 		user = await getUser(fetch);
 	} catch (error) {
@@ -26,7 +26,7 @@ export const load: LayoutLoad = async ({ fetch, params }) => {
 	}
 
 	return {
-		user,
+		user: user,
 		chats: getChats(fetch),
 		chatId: chatId,
 		chatHistory: chatHistory

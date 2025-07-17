@@ -52,6 +52,7 @@
 	},
 	"dependencies": {
 		"esbuild": "^0.25.0",
+		"lucide-svelte": "^0.525.0",
 		"marked": "^15.0.7",
 		"mode-watcher": "^0.5.1",
 		"streaming-markdown": "^0.2.15",
